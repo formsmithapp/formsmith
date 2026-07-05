@@ -1,7 +1,7 @@
 {
   "name": "@formsmithapp/renderer",
   "version": "0.0.0",
-  "description": "Formsmith respondent runtime — the thin view over the form engine (one-question stage, spring transitions, keyboard-first).",
+  "description": "Formsmith respondent runtime \u2014 the thin view over the form engine (one-question stage, spring transitions, keyboard-first).",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -25,7 +25,7 @@
   },
   "scripts": {
     "build": "tsup && node scripts/assets.mjs",
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --onSuccess \"node scripts/assets.mjs\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -13,7 +13,7 @@ import {
 import { choicesOf, commitChoice, isChoiceLike, scaleRange, scheduleAdvance } from './helpers'
 import { DownIcon, UpIcon } from './icons'
 import { Stage } from './Stage'
-import { createRetryQueue, type SubmissionPayload } from './submission'
+import { createRetryQueue, type QueueStatus, type SubmissionPayload } from './submission'
 
 export interface FormRuntimeProps {
   engine: FormEngine
@@ -55,18 +55,15 @@ export function FormRuntime(props: FormRuntimeProps) {
   )
 
   // Optimistic delivery: ending shows immediately, the queue keeps retrying.
-  const queue = useMemo(
-    () => (props.onSubmit !== undefined ? createRetryQueue(props.onSubmit) : null),
-    [props.onSubmit],
-  )
-  const queueStatus = useSyncExternalStore(
-    queue?.subscribe ?? (() => () => {}),
-    queue?.getStatus ?? (() => 'idle' as const),
-    queue?.getStatus ?? (() => 'idle' as const),
-  )
+  // The queue is created INSIDE the effect so StrictMode's double-invoke
+  // (mount → cleanup → mount) gets a fresh queue instead of a disposed one.
+  const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle')
+  const onSubmit = props.onSubmit
   useEffect(() => {
-    if (queue === null) return
-    const off = engine.on('complete', ({ answers, variables }) => {
+    if (onSubmit === undefined) return
+    const queue = createRetryQueue(onSubmit)
+    const offStatus = queue.subscribe(() => setQueueStatus(queue.getStatus()))
+    const offComplete = engine.on('complete', ({ answers, variables }) => {
       const snapshot = engine.serialize()
       queue.push({
         formId: snapshot.formId,
@@ -77,10 +74,11 @@ export function FormRuntime(props: FormRuntimeProps) {
       })
     })
     return () => {
-      off()
+      offComplete()
+      offStatus()
       queue.dispose()
     }
-  }, [engine, queue])
+  }, [engine, onSubmit])
 
   // data-theme always wins; "auto" follows the system live.
   const [systemDark, setSystemDark] = useState(
