@@ -48,8 +48,10 @@ describe('runtime bundle budget', () => {
     ).toEqual([])
 
     const { readFileSync } = await import('node:fs')
+    // tokens are generated from @formsmithapp/ui at build — compose the same
+    const { themeTokensCss } = await import('@formsmithapp/ui')
     const css =
-      readFileSync(new URL('./styles/tokens.css', import.meta.url), 'utf8') +
+      themeTokensCss('.fsr-root', '.fsr-root[data-theme="dark"]') +
       readFileSync(new URL('./styles/runtime.css', import.meta.url), 'utf8')
 
     const jsGz = gz(jsOut.contents)

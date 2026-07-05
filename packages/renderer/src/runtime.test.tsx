@@ -1,14 +1,19 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 import { createEngine, type FormDefinition } from '@formsmithapp/engine'
+import { themeTokensCss } from '@formsmithapp/ui'
 import { userEvent } from '@vitest/browser/context'
 import axe from 'axe-core'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { FormRuntime, type FormRuntimeProps } from './FormRuntime'
 import { kitchenSink, linearForm, quizForm } from './fixtures'
-import './styles/tokens.css'
 import './styles/runtime.css'
+
+// tokens are generated from @formsmithapp/ui at build — inject the same
+const tokenStyle = document.createElement('style')
+tokenStyle.textContent = themeTokensCss('.fsr-root', '.fsr-root[data-theme="dark"]')
+document.head.appendChild(tokenStyle)
 
 type Cleanup = () => void
 const cleanups: Cleanup[] = []
@@ -265,6 +270,19 @@ it('applies the theme prop and shows branding by default', async () => {
 
   const unbranded = mountForm(linearForm(), { branding: false })
   expect(unbranded.host.querySelector('.fsr-branding')).toBeNull()
+})
+
+it('themeVars land as inline custom properties and WIN over the stylesheet', async () => {
+  const { host } = mountForm(linearForm(), {
+    theme: 'light',
+    themeVars: { '--brand': '#7048e8', '--canvas': '#fdf6ec' },
+  })
+  const root = host.querySelector('.fsr-root')
+  expect(root).not.toBeNull()
+  if (!(root instanceof HTMLElement)) return
+  expect(root.style.getPropertyValue('--brand')).toBe('#7048e8')
+  // inline beats the injected token stylesheet: the page ground repaints
+  expect(getComputedStyle(root).backgroundColor).toBe('rgb(253, 246, 236)')
 })
 
 it('has no serious or critical axe violations on screens and questions', async () => {

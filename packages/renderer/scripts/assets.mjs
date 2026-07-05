@@ -1,7 +1,9 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Post-build assets: concat the stylesheet, vendor the self-hosted webfonts
+// Post-build assets: generate the .fsr-scoped token block from the canonical
+// @formsmithapp/ui values (build-time devDependency ONLY — the runtime never
+// depends on ui), concat the stylesheet, vendor the self-hosted webfonts
 // (latin-subset variable woff2 from the OFL Fontsource packages, licenses
 // included), and emit the @font-face layer.
 
@@ -9,17 +11,20 @@ import { copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from '
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { themeTokensCss } from '@formsmithapp/ui'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const pkg = join(here, '..')
 const dist = join(pkg, 'dist')
 const require = createRequire(import.meta.url)
 
-// styles.css = tokens + runtime, verbatim
-const css =
-  readFileSync(join(pkg, 'src/styles/tokens.css'), 'utf8') +
-  '\n' +
-  readFileSync(join(pkg, 'src/styles/runtime.css'), 'utf8')
+// styles.css = tokens (generated from ui) + runtime (verbatim)
+const tokensCss = `/* Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Generated from @formsmithapp/ui tokens — do not edit. */
+
+${themeTokensCss('.fsr-root', '.fsr-root[data-theme="dark"]')}`
+const css = `${tokensCss}\n${readFileSync(join(pkg, 'src/styles/runtime.css'), 'utf8')}`
 writeFileSync(join(dist, 'styles.css'), css)
 
 // fonts

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { isValidRef } from '@/lib/slug'
 import { BlockIconTile } from './block-icons'
+import { DesignPanel } from './design-panel'
 import { JumpsSection, ScoringSection, VisibilitySection } from './logic-sections'
 import { useBuilder, useBuilderState } from './store-context'
 
@@ -387,10 +388,46 @@ export function Panel({
 }: {
   onToast: (message: string, tone?: 'default' | 'error') => void
 }) {
-  const store = useBuilder()
+  const [tab, setTab] = useState<'content' | 'design'>('content')
   const state = useBuilderState()
   const block = state.doc.blocks.find((b) => b.id === state.selectedId) ?? null
-  if (block === null) return <aside className="border-l border-line bg-surface" />
+
+  return (
+    <aside className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-line bg-surface">
+      <div
+        role="tablist"
+        aria-label="Panel tabs"
+        className="grid grid-cols-2 gap-1 border-b border-line p-2"
+      >
+        {(['content', 'design'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`rounded-[7px] px-2 py-1.5 text-[12px] font-semibold capitalize transition-colors ${
+              tab === id ? 'bg-surface-2 shadow-sm' : 'text-fg-3 hover:text-fg'
+            }`}
+          >
+            {id}
+          </button>
+        ))}
+      </div>
+      {tab === 'design' ? <DesignPanel /> : <BlockPanel block={block} onToast={onToast} />}
+    </aside>
+  )
+}
+
+function BlockPanel({
+  block,
+  onToast,
+}: {
+  block: Block | null
+  onToast: (message: string, tone?: 'default' | 'error') => void
+}) {
+  const store = useBuilder()
+  if (block === null) return null
 
   const definition = getBlockDefinition(block.type)
   const answerable = !SCREEN_TYPES.has(block.type)
@@ -408,7 +445,7 @@ export function Panel({
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-line bg-surface">
+    <>
       <div className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
         <BlockIconTile iconKey={definition?.iconKey ?? ''} ai={ai} />
         <span className="min-w-0 flex-1">
@@ -498,6 +535,6 @@ export function Panel({
       <Section title="Advanced">
         <RefField block={block} />
       </Section>
-    </aside>
+    </>
   )
 }

@@ -3,120 +3,14 @@
 
 @import "tailwindcss";
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
-/* Design tokens — light is the base; dark is a re-derived retune. Values
-   mirror the renderer's tokens.css (single-source extraction is parked for
-   the packages/ui pass). data-theme on <html> always wins; a pre-paint
+/* Canonical design tokens + Tailwind mapping come from @formsmithapp/ui —
+   the single source of truth (the respondent runtime generates its scoped
+   copy from the same values). data-theme on <html> always wins; a pre-paint
    inline script sets it from localStorage/system so there is no flash. */
-:root {
-  --brand: #1e5e51;
-  --brand-strong: #164a40;
-  --brand-soft: #e4eee9;
-  --brand-ring: #2e7a6b;
-  --accent: #c1841f;
-  --accent-strong: #a66e14;
-  --accent-soft: #f6ead2;
-  --success: #2f8f63;
-  --warn: #b4671f;
-  --error: #c0463b;
+@import "@formsmithapp/ui/tokens.css";
+@import "@formsmithapp/ui/tailwind.css";
 
-  --ink: #17211d;
-  --paper: #edede4;
-  --canvas: #f4f3ec;
-  --surface: #fafaf5;
-  --surface-2: #ffffff;
-  --surface-hover: #f1f0e8;
-  --line: #deddd1;
-  --line-soft: #e8e7dd;
-  --fg: #17211d;
-  --fg-2: #4e564e;
-  --fg-3: #838b80;
-  --on-brand: #f4f3ec;
-
-  --elev-sm: 0 1px 2px rgba(23, 33, 29, 0.06), 0 1px 1px rgba(23, 33, 29, 0.04);
-  --elev-md: 0 6px 20px -6px rgba(23, 33, 29, 0.16), 0 2px 6px rgba(23, 33, 29, 0.06);
-  --elev-lg: 0 24px 60px -12px rgba(23, 33, 29, 0.3), 0 8px 24px rgba(23, 33, 29, 0.14);
-  --canvas-vignette: radial-gradient(120% 90% at 50% 0%, rgba(30, 94, 81, 0.05), transparent 60%);
-
-  --font-stack-sans:
-    "Instrument Sans Variable", "Instrument Sans", "Avenir Next", "Segoe UI Variable Display",
-    "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
-  --font-stack-serif:
-    "Fraunces Variable", Fraunces, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
-    Georgia, serif;
-  --font-stack-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-
-  --spring: cubic-bezier(0.34, 1.4, 0.5, 1);
-  --smooth: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-[data-theme="dark"] {
-  --brand: #4fb89e;
-  --brand-strong: #6ecbb2;
-  --brand-soft: #193029;
-  --brand-ring: #4fb89e;
-  --accent: #e0a64b;
-  --accent-strong: #eeb965;
-  --accent-soft: #3a2e17;
-  --success: #4fb380;
-  --warn: #d08b3c;
-  --error: #e0685c;
-
-  --ink: #0e1512;
-  --paper: #0f1613;
-  --canvas: #141c18;
-  --surface: #17211d;
-  --surface-2: #1d2823;
-  --surface-hover: #212d27;
-  --line: #2b3630;
-  --line-soft: #232e28;
-  --fg: #ebeee7;
-  --fg-2: #aeb6ac;
-  --fg-3: #79817a;
-  --on-brand: #0e1512;
-
-  --elev-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
-  --elev-md: 0 6px 20px -6px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
-  --elev-lg: 0 24px 60px -12px rgba(0, 0, 0, 0.66), 0 8px 24px rgba(0, 0, 0, 0.4);
-  --canvas-vignette: radial-gradient(120% 90% at 50% 0%, rgba(79, 184, 158, 0.07), transparent 60%);
-}
-
-@theme inline {
-  --color-brand: var(--brand);
-  --color-brand-strong: var(--brand-strong);
-  --color-brand-soft: var(--brand-soft);
-  --color-brand-ring: var(--brand-ring);
-  --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
-  --color-accent-soft: var(--accent-soft);
-  --color-success: var(--success);
-  --color-warn: var(--warn);
-  --color-error: var(--error);
-  --color-ink: var(--ink);
-  --color-paper: var(--paper);
-  --color-canvas: var(--canvas);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-surface-hover: var(--surface-hover);
-  --color-line: var(--line);
-  --color-line-soft: var(--line-soft);
-  --color-fg: var(--fg);
-  --color-fg-2: var(--fg-2);
-  --color-fg-3: var(--fg-3);
-  --color-on-brand: var(--on-brand);
-
-  --font-sans: var(--font-stack-sans);
-  --font-serif: var(--font-stack-serif);
-  --font-mono: var(--font-stack-mono);
-
-  --shadow-sm: var(--elev-sm);
-  --shadow-md: var(--elev-md);
-  --shadow-lg: var(--elev-lg);
-
-  --ease-spring: var(--spring);
-  --ease-smooth: var(--smooth);
-}
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 html,
 body {
@@ -125,8 +19,8 @@ body {
 
 body {
   background: var(--paper);
-  color: var(--fg);
-  font-family: var(--font-stack-sans);
+  color: var(--text);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -137,7 +31,7 @@ body {
 
 /* mono eyebrow — the connective tissue (design §3.1) */
 .eyebrow {
-  font-family: var(--font-stack-mono);
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.13em;
@@ -157,7 +51,7 @@ body {
 /* builder canvas: contenteditable placeholders */
 [contenteditable].editable:empty::before {
   content: attr(data-placeholder);
-  color: var(--fg-3);
+  color: var(--text-3);
   pointer-events: none;
 }
 [contenteditable].editable:focus {

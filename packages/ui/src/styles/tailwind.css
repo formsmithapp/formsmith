@@ -1,0 +1,42 @@
+/* Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Tailwind v4 preset: maps the canonical Formsmith tokens (tokens.css) onto
+   the utility vocabulary. `inline` keeps values as var() references so the
+   [data-theme] token blocks — and any scoped theme override — always win. */
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ring: var(--brand-ring);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-error: var(--error);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--border);
+  --color-line-soft: var(--border-soft);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-on-brand: var(--on-brand);
+
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --ease-spring: var(--spring);
+  --ease-smooth: var(--ease);
+}

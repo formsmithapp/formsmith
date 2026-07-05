@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Metadata } from 'next'
-import '@formsmithapp/renderer/fonts.css'
+// All registry font pairs are DECLARED here (same-origin, hashed by Next);
+// a family's files download only when a theme actually uses it.
+import '@formsmithapp/ui/fonts.css'
 import '@formsmithapp/renderer/styles.css'
 import './globals.css'
 import { Providers } from './providers'

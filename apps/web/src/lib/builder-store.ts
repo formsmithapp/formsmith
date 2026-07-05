@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Block, BlockType, FormDefinition, Variable } from '@formsmithapp/engine'
+import { defaultThemeConfig } from '@formsmithapp/ui'
 import {
   cloneBlockRules,
   removeBlockCascade,
@@ -280,6 +281,24 @@ export function createBuilderStore(options: BuilderStoreOptions) {
 
     setHiddenFields(names: string[]) {
       commit(setHiddenFieldsCascade(state.doc, names))
+    },
+
+    /**
+     * Merges a theme patch onto the document (defaults baked in on first
+     * touch so publish pins a complete config). `undefined` clears a key
+     * (e.g. background → back to the stock ground). Merge-keyed: color-picker
+     * drags coalesce into one undo step.
+     */
+    setTheme(patch: Record<string, unknown>) {
+      const theme: Record<string, unknown> = {
+        ...defaultThemeConfig,
+        ...state.doc.theme,
+        ...patch,
+      }
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete theme[key]
+      }
+      commit({ ...state.doc, theme }, 'form:theme')
     },
 
     undo() {

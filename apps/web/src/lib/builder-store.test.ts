@@ -195,3 +195,45 @@ describe('publish', () => {
     expect(store.getState().status).toBe('draft')
   })
 })
+
+describe('theme', () => {
+  it('setTheme bakes defaults on first touch and merges patches', () => {
+    expect(store.getState().doc.theme).toBeUndefined() // untouched forms stay stock
+    store.setTheme({ brandColor: '#7048e8' })
+    expect(store.getState().doc.theme).toMatchObject({
+      brandColor: '#7048e8',
+      appearance: 'auto',
+      fontPair: 'editorial',
+    })
+    store.setTheme({ appearance: 'dark' })
+    expect(store.getState().doc.theme).toMatchObject({
+      brandColor: '#7048e8', // earlier patch survives
+      appearance: 'dark',
+    })
+  })
+
+  it('undefined clears a key (background back to stock); edits coalesce per merge key', () => {
+    store.setTheme({ background: { type: 'color', value: '#fdf6ec' } })
+    clock += 200
+    store.setTheme({ background: undefined })
+    expect('background' in (store.getState().doc.theme ?? {})).toBe(false)
+
+    // both edits coalesced into ONE history entry: a single undo reverts all
+    store.undo()
+    expect(store.getState().doc.theme).toBeUndefined()
+  })
+
+  it('publish pins the theme in the snapshot; later theme edits leave it untouched', async () => {
+    store.setTheme({ brandColor: '#7048e8', appearance: 'dark' })
+    const { version } = await store.publish()
+
+    store.setTheme({ brandColor: '#c0463b' })
+    await store.flushSave()
+
+    const snapshot = await repository.getSnapshot(formId(), version)
+    expect(snapshot?.theme).toMatchObject({ brandColor: '#7048e8', appearance: 'dark' })
+    expect((await repository.get(formId()))?.form.theme).toMatchObject({
+      brandColor: '#c0463b',
+    })
+  })
+})

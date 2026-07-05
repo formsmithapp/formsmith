@@ -7,6 +7,7 @@ import { FormRuntime } from '@formsmithapp/renderer'
 import { X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useBuilder } from './store-context'
+import { useFormTheming } from './use-theme'
 
 /**
  * Full-screen respondent preview — literally the runtime renderer on a
@@ -40,7 +41,9 @@ export function PreviewOverlay({
   )
   const [session, setSession] = useState(() => build({}))
   const hiddenNames = store.getState().doc.settings?.hiddenFields ?? []
-  const [theme] = useState<'light' | 'dark'>(() =>
+  // Themed forms preview under THEIR theme; untouched forms follow the chrome.
+  const theming = useFormTheming(store.getState().doc.theme)
+  const [chromeTheme] = useState<'light' | 'dark'>(() =>
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
   )
 
@@ -51,7 +54,12 @@ export function PreviewOverlay({
   return (
     <div className="fixed inset-0 z-50 bg-canvas">
       {'engine' in session && session.engine !== undefined ? (
-        <FormRuntime engine={session.engine} onSubmit={handleSubmit} theme={theme} />
+        <FormRuntime
+          engine={session.engine}
+          onSubmit={handleSubmit}
+          theme={theming?.appearance ?? chromeTheme}
+          themeVars={theming?.vars}
+        />
       ) : (
         <div className="grid h-full place-items-center">
           <div className="max-w-md text-center">

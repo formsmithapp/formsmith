@@ -98,6 +98,12 @@ export interface FormDefinition {
   logic?: Rule[]
   variables?: Variable[]
   settings?: FormSettings
+  /**
+   * Presentation theme (ThemeConfig-shaped; owned by `@formsmithapp/ui`).
+   * Opaque to the engine — carried on the document so publish snapshots pin
+   * the look responses were collected under.
+   */
+  theme?: Record<string, unknown>
 }
 
 export type EngineStatus = 'in_progress' | 'complete'

@@ -9,6 +9,7 @@ import { SCREEN_TYPES } from '@/lib/builder-store'
 import { InlineEdit } from './inline-edit'
 import { conditionFields } from './logic-ui'
 import { useBuilder, useBuilderState } from './store-context'
+import { useFormTheming } from './use-theme'
 
 interface Choice {
   id: string
@@ -258,8 +259,17 @@ export function Canvas() {
       ? editEngine.pipe(block.title, { escape: false })
       : null
 
+  // Live theming: the stage re-tokens itself to the FORM's appearance and
+  // derived vars (the builder chrome keeps its own theme). `background` is
+  // the shorthand so gradient grounds work.
+  const theming = useFormTheming(state.doc.theme)
+
   return (
-    <main className="relative min-h-0 overflow-y-auto bg-canvas">
+    <main
+      data-theme={theming?.appearance}
+      style={theming?.vars as React.CSSProperties | undefined}
+      className="relative min-h-0 overflow-y-auto [background:var(--canvas)] text-fg"
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 [background:var(--canvas-vignette)]"

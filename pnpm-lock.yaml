@@ -47,6 +47,9 @@ importers:
       '@formsmithapp/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@formsmithapp/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@radix-ui/react-dialog':
         specifier: ^1.1.0
         version: 1.1.18(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -177,6 +180,9 @@ importers:
       '@formsmithapp/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@formsmithapp/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0
@@ -234,6 +240,40 @@ importers:
         version: 3.2.6(@types/node@22.20.0)(@vitest/browser@3.2.6)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
   packages/tsconfig: {}
+
+  packages/ui:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@fontsource-variable/fraunces':
+        specifier: ^5.2.0
+        version: 5.2.9
+      '@fontsource-variable/instrument-sans':
+        specifier: ^5.2.0
+        version: 5.2.8
+      '@fontsource-variable/newsreader':
+        specifier: ^5.2.0
+        version: 5.2.10
+      '@fontsource-variable/schibsted-grotesk':
+        specifier: ^5.2.0
+        version: 5.2.8
+      '@formsmithapp/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@22.20.0)(@vitest/browser@3.2.6)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
 
 packages:
 
@@ -492,6 +532,12 @@ packages:
 
   '@fontsource-variable/instrument-sans@5.2.8':
     resolution: {integrity: sha512-mTCaukbdIjjoipj2E3Q5XoZM3ZxJWdzyHevf/LG/0PHlfF9Q85pxOM7B7A9MerFyxmRzz5kVlumgIvgDSG4CPg==}
+
+  '@fontsource-variable/newsreader@5.2.10':
+    resolution: {integrity: sha512-MdI2iRwrqWpMOU/2aV2BgfZ4dJNlj/XlYaY8Zb7t87mWqHskYW0XiUANkt1cyOCiEfW2VQ0bQ5vZgGPp6B2B4w==}
+
+  '@fontsource-variable/schibsted-grotesk@5.2.8':
+    resolution: {integrity: sha512-nZAorDrFue4dXZbI613WdvAhu5DPH1UJYNn5fWl7Poa+nl/s9o3VUcQImIiVZpQnYG/jkPVzHsTE7WZbSDvvkw==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2302,6 +2348,10 @@ snapshots:
   '@fontsource-variable/fraunces@5.2.9': {}
 
   '@fontsource-variable/instrument-sans@5.2.8': {}
+
+  '@fontsource-variable/newsreader@5.2.10': {}
+
+  '@fontsource-variable/schibsted-grotesk@5.2.8': {}
 
   '@img/colour@1.1.0':
     optional: true

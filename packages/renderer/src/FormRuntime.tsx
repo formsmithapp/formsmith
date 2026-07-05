@@ -2,7 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { FormEngine } from '@formsmithapp/engine'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  type CSSProperties,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import {
   EngineContext,
   OptionsContext,
@@ -25,6 +33,12 @@ export interface FormRuntimeProps {
   /** "Powered by Formsmith" badge. Default true. */
   branding?: boolean
   theme?: 'light' | 'dark' | 'auto'
+  /**
+   * Flat CSS custom-property overrides (`--brand`, `--canvas`, …) applied
+   * inline on `.fsr-root`, winning over the stylesheet. Derivation happens in
+   * the HOST (`deriveTheme` in @formsmithapp/ui) — the runtime stays dumb.
+   */
+  themeVars?: Record<string, string>
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -169,7 +183,12 @@ export function FormRuntime(props: FormRuntimeProps) {
     <EngineContext.Provider value={engine}>
       <OptionsContext.Provider value={options}>
         <SubmissionContext.Provider value={queueStatus}>
-          <div className="fsr-root" data-theme={resolvedTheme} ref={rootRef}>
+          <div
+            className="fsr-root"
+            data-theme={resolvedTheme}
+            style={props.themeVars as CSSProperties | undefined}
+            ref={rootRef}
+          >
             {showProgress && (
               <div
                 className="fsr-progress"
