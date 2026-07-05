@@ -21,14 +21,25 @@ export function PreviewOverlay({
 }) {
   const store = useBuilder()
 
-  const [session] = useState(() => {
-    try {
-      return { engine: createEngine(structuredClone(store.getState().doc), { mode: 'runtime' }) }
-    } catch (error) {
-      if (error instanceof FormValidationError) return { issues: error.issues }
-      throw error
-    }
-  })
+  const [hiddenValues, setHiddenValues] = useState<Record<string, string>>({})
+  const build = useCallback(
+    (hidden: Record<string, string>) => {
+      try {
+        return {
+          engine: createEngine(structuredClone(store.getState().doc), {
+            mode: 'runtime',
+            hiddenFields: hidden,
+          }),
+        }
+      } catch (error) {
+        if (error instanceof FormValidationError) return { issues: error.issues }
+        throw error
+      }
+    },
+    [store],
+  )
+  const [session, setSession] = useState(() => build({}))
+  const hiddenNames = store.getState().doc.settings?.hiddenFields ?? []
   const [theme] = useState<'light' | 'dark'>(() =>
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
   )
@@ -53,6 +64,34 @@ export function PreviewOverlay({
             </ul>
           </div>
         </div>
+      )}
+      {hiddenNames.length > 0 && (
+        <form
+          className="absolute top-4 left-4 z-[55] flex items-center gap-1.5 rounded-[10px] border border-line bg-surface-2 px-2.5 py-1.5 shadow-sm"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSession(build(hiddenValues))
+          }}
+        >
+          {hiddenNames.map((name) => (
+            <input
+              key={name}
+              aria-label={`Hidden field ${name}`}
+              placeholder={name}
+              value={hiddenValues[name] ?? ''}
+              onChange={(event) =>
+                setHiddenValues((prev) => ({ ...prev, [name]: event.target.value }))
+              }
+              className="w-24 rounded-[7px] border border-line bg-surface px-1.5 py-1 font-mono text-[11px] outline-none focus:border-brand-ring"
+            />
+          ))}
+          <button
+            type="submit"
+            className="rounded-[7px] bg-brand px-2 py-1 text-[11px] font-semibold text-on-brand"
+          >
+            Restart
+          </button>
+        </form>
       )}
       <div className="absolute top-4 right-4 z-[55] flex items-center gap-2.5">
         <span className="eyebrow rounded-full border border-line bg-surface-2 px-3 py-1.5 text-fg-2 shadow-sm">

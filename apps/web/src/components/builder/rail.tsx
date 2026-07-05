@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { getBlockDefinition } from '@formsmithapp/blocks'
 import type { Block } from '@formsmithapp/engine'
-import { Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { Copy, Eye, GripVertical, Plus, Sigma, Split, Trash2 } from 'lucide-react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { BlockIconTile } from './block-icons'
 import { useBuilder, useBuilderState } from './store-context'
@@ -29,10 +29,12 @@ function RailRow({
   block,
   questionNumber,
   selected,
+  glyphs,
 }: {
   block: Block
   questionNumber: number | null
   selected: boolean
+  glyphs: { visibility: boolean; jumps: boolean; scoring: boolean }
 }) {
   const store = useBuilder()
   const pinned = block.type === 'welcome'
@@ -76,8 +78,11 @@ function RailRow({
             <span className="block truncate text-[13px] leading-tight font-medium">
               {block.title !== '' ? block.title : (definition?.displayName ?? block.type)}
             </span>
-            <span className="block font-mono text-[9.5px] tracking-[0.08em] text-fg-3 uppercase">
+            <span className="flex items-center gap-1 font-mono text-[9.5px] tracking-[0.08em] text-fg-3 uppercase">
               {definition?.displayName ?? block.type}
+              {glyphs.visibility && <Eye size={9} aria-label="Has visibility rule" />}
+              {glyphs.jumps && <Split size={9} aria-label="Has jump logic" />}
+              {glyphs.scoring && <Sigma size={9} aria-label="Has scoring" />}
             </span>
           </span>
         </button>
@@ -149,12 +154,22 @@ export function Rail() {
             {blocks.map((block) => {
               const answerable = !SCREEN_TYPES.has(block.type)
               if (answerable) question += 1
+              const logic = state.doc.logic ?? []
               return (
                 <RailRow
                   key={block.id}
                   block={block}
                   questionNumber={answerable ? question : null}
                   selected={state.selectedId === block.id}
+                  glyphs={{
+                    visibility: block.visibility !== undefined,
+                    jumps: logic.some(
+                      (rule) => rule.kind === 'jump' && rule.owner?.ref === block.id,
+                    ),
+                    scoring: logic.some(
+                      (rule) => rule.kind === 'calculation' && rule.owner?.ref === block.id,
+                    ),
+                  }}
                 />
               )
             })}

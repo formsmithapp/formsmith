@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 'use client'
 
-import type { Block } from '@formsmithapp/engine'
-import { CornerDownRight, Plus, Sparkles, X } from 'lucide-react'
+import { type Block, createEngine } from '@formsmithapp/engine'
+import { Braces, CornerDownRight, Plus, Sparkles, X } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { InlineEdit } from './inline-edit'
+import { conditionFields } from './logic-ui'
 import { useBuilder, useBuilderState } from './store-context'
 
 interface Choice {
@@ -182,6 +184,46 @@ function AnswerMock({ block }: { block: Block }) {
   }
 }
 
+/** `{{ }}` recall inserter — appends a token from earlier refs/variables/hidden. */
+function RecallButton({ block }: { block: Block }) {
+  const store = useBuilder()
+  const { doc } = useBuilderState()
+  const [open, setOpen] = useState(false)
+  const fields = conditionFields(doc, block.id, { includeSelf: false })
+  if (fields.length === 0) return null
+  return (
+    <span className="relative">
+      <button
+        type="button"
+        aria-label="Insert recall token"
+        onClick={() => setOpen((v) => !v)}
+        className="grid size-6 place-items-center rounded-md border border-line bg-surface-2 text-fg-3 opacity-0 transition-opacity group-hover/stage:opacity-100 hover:text-brand"
+      >
+        <Braces size={11} />
+      </button>
+      {open && (
+        <span className="absolute top-7 right-0 z-10 grid w-44 gap-0.5 rounded-[10px] border border-line bg-surface-2 p-1.5 shadow-md">
+          {fields.map((field) => (
+            <button
+              key={field.ref}
+              type="button"
+              onClick={() => {
+                store.updateBlock(block.id, { title: `${block.title}{{${field.ref}}}` })
+                setOpen(false)
+              }}
+              className="truncate rounded-md px-2 py-1 text-left font-mono text-[11px] hover:bg-surface-hover"
+            >
+              {'{{'}
+              {field.ref}
+              {'}}'}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 const BADGE: Record<string, string> = {
   welcome: 'Welcome',
   statement: 'Statement',
@@ -199,6 +241,22 @@ export function Canvas() {
   const isScreen = block !== null && SCREEN_TYPES.has(block.type)
   const isAi = block?.type === 'ai_followup'
   const isChoiceEditable = block?.type === 'multiple_choice' || block?.type === 'dropdown'
+
+  // last-good edit engine: resolves {{tokens}} with initial variables for the hint
+  const lastEngine = useRef<ReturnType<typeof createEngine> | null>(null)
+  const editEngine = useMemo(() => {
+    try {
+      lastEngine.current = createEngine(state.doc, { mode: 'edit' })
+    } catch {
+      // keep the previous engine while the doc is mid-edit invalid
+    }
+    return lastEngine.current
+  }, [state.doc])
+  const hasTokens = block !== null && /\{\{/.test(block.title)
+  const pipedHint =
+    hasTokens && block !== null && editEngine !== null
+      ? editEngine.pipe(block.title, { escape: false })
+      : null
 
   return (
     <main className="relative min-h-0 overflow-y-auto bg-canvas">
@@ -240,7 +298,8 @@ export function Canvas() {
               </p>
             )}
 
-            <div className="flex items-start gap-1">
+            <div className="group/stage flex items-start gap-1">
+              <RecallButton block={block} />
               <InlineEdit
                 value={block.title}
                 placeholder={isScreen ? 'Screen headline…' : 'Type your question…'}
@@ -259,6 +318,11 @@ export function Canvas() {
               )}
             </div>
 
+            {pipedHint !== null && (
+              <p className="mt-1.5 font-mono text-[10.5px] text-fg-3" data-pipe-hint>
+                resolves to: {pipedHint}
+              </p>
+            )}
             <InlineEdit
               value={block.description ?? ''}
               placeholder="Add a description (optional)…"

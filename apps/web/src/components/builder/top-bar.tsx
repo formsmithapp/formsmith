@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { PublishValidationError } from '@/lib/repository/types'
 import { BrandMark } from '../brand-mark'
 import { ThemeToggle } from '../theme-toggle'
+import { SettingsSheet } from './settings-sheet'
 import { useBuilder, useBuilderState } from './store-context'
 
 const TABS = [
@@ -99,6 +100,7 @@ export function TopBar({
         )}
       </output>
 
+      <SettingsSheet />
       <ThemeToggle />
       <button
         type="button"

@@ -1,7 +1,18 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Block, BlockType, FormDefinition } from '@formsmithapp/engine'
+import type { Block, BlockType, FormDefinition, Variable } from '@formsmithapp/engine'
+import {
+  cloneBlockRules,
+  removeBlockCascade,
+  renameRefCascade,
+  setHiddenFieldsCascade,
+  setJumps,
+  setScoring,
+  setVariablesCascade,
+  setVisibility,
+} from './logic/edits'
+import type { ConditionGroup, JumpBranch, ScoringRule } from './logic/model'
 import type { FormsRepository, StoredForm } from './repository/types'
 import { makeBlock } from './seed'
 import { uniqueRef } from './slug'
@@ -168,8 +179,13 @@ export function createBuilderStore(options: BuilderStoreOptions) {
     },
 
     setRef(id: string, ref: string) {
-      const blocks = state.doc.blocks.map((b) => (b.id === id ? { ...b, ref } : b))
-      commit(patchBlocks(blocks))
+      const block = state.doc.blocks.find((b) => b.id === id)
+      if (block === undefined || block.ref === ref) return
+      const rewritten = renameRefCascade(state.doc, block.ref, ref)
+      commit({
+        ...rewritten,
+        blocks: rewritten.blocks.map((b) => (b.id === id ? { ...b, ref } : b)),
+      })
     },
 
     /**
@@ -197,10 +213,12 @@ export function createBuilderStore(options: BuilderStoreOptions) {
 
     removeBlock(id: string) {
       const index = blockIndex(id)
-      if (index < 0) return
-      const blocks = state.doc.blocks.filter((b) => b.id !== id)
+      const block = state.doc.blocks[index]
+      if (index < 0 || block === undefined) return
+      const cascaded = removeBlockCascade(state.doc, block)
+      const blocks = cascaded.blocks.filter((b) => b.id !== id)
       const neighbor = blocks[Math.min(index, blocks.length - 1)]
-      commit(patchBlocks(blocks))
+      commit({ ...cascaded, blocks })
       if (state.selectedId === id) setState({ selectedId: neighbor?.id ?? null })
     },
 
@@ -212,14 +230,12 @@ export function createBuilderStore(options: BuilderStoreOptions) {
         ...structuredClone(source),
         id: crypto.randomUUID(),
         ref: uniqueRef(source.ref, takenRefs()),
+        visibility: undefined, // cloneBlockRules re-points at the cloned rule
       }
       const at = Math.min(index + 1, source.type === 'welcome' ? 1 : tailStart(state.doc))
-      const blocks =
-        source.type === 'welcome'
-          ? state.doc.blocks // a second welcome is not allowed — no-op
-          : [...state.doc.blocks.slice(0, at), copy, ...state.doc.blocks.slice(at)]
-      if (blocks === state.doc.blocks) return
-      commit(patchBlocks(blocks))
+      if (source.type === 'welcome') return // a second welcome is not allowed
+      const blocks = [...state.doc.blocks.slice(0, at), copy, ...state.doc.blocks.slice(at)]
+      commit(cloneBlockRules(patchBlocks(blocks), source, copy))
       setState({ selectedId: copy.id })
     },
 
@@ -244,6 +260,26 @@ export function createBuilderStore(options: BuilderStoreOptions) {
       }
       const blocks = [...without.slice(0, target), moving, ...without.slice(target)]
       commit(patchBlocks(blocks))
+    },
+
+    setVisibilityGroup(blockId: string, group: ConditionGroup | null) {
+      commit(setVisibility(state.doc, blockId, group))
+    },
+
+    setJumpBranches(blockId: string, branches: JumpBranch[]) {
+      commit(setJumps(state.doc, blockId, branches))
+    },
+
+    setScoringRules(blockId: string, rows: ScoringRule[]) {
+      commit(setScoring(state.doc, blockId, rows))
+    },
+
+    setVariables(variables: Variable[]) {
+      commit(setVariablesCascade(state.doc, variables))
+    },
+
+    setHiddenFields(names: string[]) {
+      commit(setHiddenFieldsCascade(state.doc, names))
     },
 
     undo() {

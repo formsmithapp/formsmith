@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { isValidRef } from '@/lib/slug'
 import { BlockIconTile } from './block-icons'
+import { JumpsSection, ScoringSection, VisibilitySection } from './logic-sections'
 import { useBuilder, useBuilderState } from './store-context'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -449,6 +450,23 @@ export function Panel({
             checked={block.required === true}
             onChange={(v) => store.updateBlock(block.id, { required: v })}
           />
+          {block.required === true && (
+            <TextField
+              label="Required message"
+              value={block.validations?.find((v) => v.type === 'required')?.message ?? ''}
+              placeholder="This field is required."
+              onCommit={(message) => {
+                const rest = (block.validations ?? []).filter((v) => v.type !== 'required')
+                store.updateBlock(
+                  block.id,
+                  {
+                    validations: message === '' ? rest : [...rest, { type: 'required', message }],
+                  },
+                  `reqmsg:${block.id}`,
+                )
+              }}
+            />
+          )}
         </Section>
       )}
 
@@ -464,6 +482,19 @@ export function Panel({
         )}
       </Section>
 
+      {answerable && (
+        <Section title="Logic">
+          <VisibilitySection block={block} />
+          <div className="border-t border-line-soft pt-3.5">
+            <JumpsSection block={block} />
+          </div>
+        </Section>
+      )}
+      {answerable && (
+        <Section title="Scoring">
+          <ScoringSection block={block} />
+        </Section>
+      )}
       <Section title="Advanced">
         <RefField block={block} />
       </Section>
