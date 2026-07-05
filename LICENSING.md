@@ -98,6 +98,13 @@ never become part of a host page's bundle. This rule is enforced in CI.
 
 AGPL packages may freely depend on MIT packages (permissive → copyleft is always fine).
 
+**Native (non-iframe) embedding is a commercial option, not an open-license one.** Rendering the
+AGPL engine or renderer *directly inside a host application's bundle* (headless / native, no iframe)
+would extend AGPL's obligations to that host application, so the open licenses do not permit it for
+closed applications. That capability is offered separately under a **commercial embedding license**
+(dual-licensing, in the spirit of MySQL/Qt) — email gnana097@gmail.com. The open, copyleft-free
+way to embed is the MIT iframe SDK.
+
 ## 6. Third-party dependencies
 
 Dependencies must be compatible with this model: permissive licenses (MIT, Apache-2.0,
