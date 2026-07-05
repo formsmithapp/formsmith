@@ -92,13 +92,13 @@ Please respect these — they are what make the open-core model work:
 
 ## Security
 
-Please **do not** open public issues for security vulnerabilities. Email **gnana097@gmail.com** with
-details and you'll get a prompt response. A formal `SECURITY.md` will follow.
+Please **do not** open public issues for security vulnerabilities. See [`SECURITY.md`](SECURITY.md)
+for how to report privately (GitHub private advisories or email).
 
 ## Code of conduct
 
-Be respectful and constructive; harassment or hostility isn't welcome here. A formal Code of Conduct
-(Contributor Covenant) will be adopted as the community grows.
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating, you agree to
+uphold it; report unacceptable behavior to gnana097@gmail.com.
 
 ---
 
