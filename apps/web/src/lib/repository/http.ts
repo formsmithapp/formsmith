@@ -105,6 +105,7 @@ export class HttpResponsesRepository implements ResponsesRepository {
         answers: payload.answers,
         variables: payload.variables,
         hiddenFields: payload.hiddenFields,
+        aiExchanges: payload.aiExchanges,
       }),
     })
     if (status === 422) throw new SubmissionRejectedError(body?.issues ?? [])

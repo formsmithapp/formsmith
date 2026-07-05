@@ -3,7 +3,8 @@
 'use client'
 
 import { createEngine, extractHiddenFields, type FormDefinition } from '@formsmithapp/engine'
-import { FormRuntime } from '@formsmithapp/renderer'
+import { type AiFollowupHandler, FormRuntime } from '@formsmithapp/renderer'
+import { parseThemeConfig } from '@formsmithapp/ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getResponsesRepository } from '@/lib/repository/client'
 import { BrandMark } from './brand-mark'
@@ -43,10 +44,55 @@ export function LiveForm({ form }: { form: FormDefinition | null }) {
       answers: Record<string, unknown>
       variables: Record<string, unknown>
       hiddenFields: Record<string, string>
+      aiExchanges?: import('@formsmithapp/renderer').AiExchangeEntry[]
     }) => {
       await getResponsesRepository().add(payload)
     },
     [],
+  )
+
+  // the AI exchange: fetch the next signed question from the public endpoint
+  const formId = form?.id
+  const handleAiFollowup: AiFollowupHandler = useCallback(
+    async ({ ref, baseAnswer, exchanges, index }) => {
+      if (formId === undefined) return null
+      try {
+        const res = await fetch(`/api/v1/f/${formId}/ai`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ref,
+            index,
+            baseAnswer: String(baseAnswer ?? ''),
+            exchanges: exchanges.map(({ index: i, question, meta, sig, answer }) => ({
+              index: i,
+              question,
+              meta,
+              sig,
+              answer,
+            })),
+          }),
+        })
+        if (!res.ok) return null
+        const body = (await res.json()) as {
+          done: boolean
+          question?: string
+          meta?: Record<string, unknown>
+          sig?: string
+        }
+        return body.done || body.question === undefined
+          ? null
+          : { question: body.question, meta: body.meta ?? {}, sig: body.sig ?? '' }
+      } catch {
+        return null // network death → no follow-up, never an error state
+      }
+    },
+    [formId],
+  )
+
+  const logoUrl = useMemo(
+    () => (form === null ? undefined : parseThemeConfig(form.theme).logoUrl),
+    [form],
   )
 
   if (!mounted) return <div className="h-dvh bg-canvas" />
@@ -74,8 +120,10 @@ export function LiveForm({ form }: { form: FormDefinition | null }) {
       <FormRuntime
         engine={engine}
         onSubmit={handleSubmit}
+        onAiFollowup={handleAiFollowup}
         theme={theming?.appearance ?? 'auto'}
         themeVars={theming?.vars}
+        logoUrl={logoUrl}
       />
     </div>
   )

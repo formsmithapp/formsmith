@@ -122,6 +122,24 @@ export function DesignPanel() {
           Buttons, accents and highlights derive from this color — text contrast is kept accessible
           automatically.
         </p>
+        <label className="block">
+          <span className="mb-1.5 block font-mono text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">
+            Logo URL
+          </span>
+          <input
+            value={theme.logoUrl ?? ''}
+            onChange={(event) =>
+              store.setTheme({
+                logoUrl: event.target.value.trim() === '' ? undefined : event.target.value.trim(),
+              })
+            }
+            placeholder="https://yoursite.com/logo.svg"
+            className="w-full rounded-[8px] border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[12px] outline-none focus:border-brand-ring"
+          />
+          <span className="mt-1 block text-[11px] text-fg-3">
+            https only, hosted by you — uploads arrive with storage in v1.1.
+          </span>
+        </label>
       </Group>
 
       <Group title="Appearance">

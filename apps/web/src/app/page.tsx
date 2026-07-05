@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 'use client'
 
+import type { FormDefinition } from '@formsmithapp/engine'
 import { instantiateTemplate, TEMPLATES, type TemplateDefinition } from '@formsmithapp/templates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, FileText, Plus, Settings, Sparkles, Trash2 } from 'lucide-react'
+import { Copy, FileText, Loader2, Plus, Settings, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { BrandMark } from '@/components/brand-mark'
 import { ImportBanner } from '@/components/import-banner'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -32,6 +34,32 @@ export default function FormsListPage() {
     onSuccess: (stored) => {
       invalidate()
       router.push(`/forms/${stored.form.id}/create`)
+    },
+  })
+
+  // AI form generation — visible only when the instance has a provider
+  const meta = useQuery({
+    queryKey: ['meta'],
+    queryFn: async () => (await (await fetch('/api/v1/meta')).json()) as { aiConfigured: boolean },
+    staleTime: 300_000,
+  })
+  const [aiPrompt, setAiPrompt] = useState('')
+  const generate = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await fetch('/api/v1/forms/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      if (res.status !== 201) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(body?.error ?? `generation failed (${res.status})`)
+      }
+      return (await res.json()) as { form: FormDefinition }
+    },
+    onSuccess: ({ form }) => {
+      invalidate()
+      router.push(`/forms/${form.id}/create`)
     },
   })
   const duplicateForm = useMutation({
@@ -77,6 +105,47 @@ export default function FormsListPage() {
       </div>
 
       <ImportBanner />
+
+      {meta.data?.aiConfigured === true && (
+        <section className="mt-8">
+          <h2 className="eyebrow text-fg-3">Start with AI</h2>
+          <form
+            className="mt-3 flex items-start gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (aiPrompt.trim().length >= 3) generate.mutate(aiPrompt.trim())
+            }}
+          >
+            <div className="min-w-0 flex-1">
+              <input
+                value={aiPrompt}
+                onChange={(event) => setAiPrompt(event.target.value)}
+                aria-label="Describe your form"
+                placeholder="Describe your form — e.g. customer discovery interview for a budgeting app"
+                className="w-full rounded-[10px] border border-line bg-surface-2 px-3.5 py-2.5 text-[13.5px] shadow-sm outline-none focus:border-brand-ring"
+              />
+              {generate.isError && (
+                <p className="mt-1 text-[11.5px] text-error">{generate.error.message}</p>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={generate.isPending || aiPrompt.trim().length < 3}
+              className="flex shrink-0 items-center gap-1.5 rounded-[10px] bg-brand px-4 py-2.5 text-[13.5px] font-semibold text-on-brand shadow-sm disabled:opacity-60"
+            >
+              {generate.isPending ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Wand2 size={14} aria-hidden="true" />
+              )}
+              {generate.isPending ? 'Generating…' : 'Generate'}
+            </button>
+          </form>
+          <p className="mt-1.5 text-[11.5px] text-fg-3">
+            You get a draft to review in the builder — nothing publishes on its own.
+          </p>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="eyebrow text-fg-3">Start from a template</h2>

@@ -19,6 +19,7 @@ export interface ResponseRow {
   variables: Record<string, unknown>
   hidden: Record<string, string>
   ending: string | null
+  aiTrace: unknown[] | null
   submittedAt: Date
 }
 
@@ -29,6 +30,7 @@ export interface NewResponse {
   variables: Record<string, unknown>
   hidden: Record<string, string>
   ending: string | null
+  aiTrace?: unknown[] | null
 }
 
 export function responsesRepository(db: Database) {

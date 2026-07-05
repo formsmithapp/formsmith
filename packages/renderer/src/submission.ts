@@ -8,12 +8,24 @@
  * stays the caller's concern — this queue only orchestrates attempts.
  */
 
+/** A server-issued AI exchange: question + trace meta + signature + answer. */
+export interface AiExchangeEntry {
+  ref: string
+  index: number
+  question: string
+  meta: Record<string, unknown>
+  sig: string
+  answer: string
+}
+
 export interface SubmissionPayload {
   formId: string
   formVersion?: number
   answers: Record<string, unknown>
   variables: Record<string, unknown>
   hiddenFields: Record<string, string>
+  /** Present when ai_followup exchanges happened — verified server-side. */
+  aiExchanges?: AiExchangeEntry[]
 }
 
 export type SubmitFn = (payload: SubmissionPayload) => Promise<void> | void

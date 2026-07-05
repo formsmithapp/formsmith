@@ -31,6 +31,7 @@ export default defineConfig({
         process.env.DATABASE_URL ?? 'postgres://formsmith:formsmith@localhost:5432/formsmith',
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? 'e2e-only-secret-not-for-production',
       BETTER_AUTH_URL: 'http://localhost:3105',
+      FORMSMITH_AI: 'mock', // deterministic provider; 'FAIL_AI' in an answer kills it
     },
   },
 })

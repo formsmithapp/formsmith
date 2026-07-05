@@ -3,6 +3,7 @@
 'use client'
 
 import type { Block } from '@formsmithapp/engine'
+import { parseThemeConfig } from '@formsmithapp/ui'
 import { Braces, CornerDownRight, Plus, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
@@ -256,6 +257,7 @@ export function Canvas() {
   // derived vars (the builder chrome keeps its own theme). `background` is
   // the shorthand so gradient grounds work.
   const theming = useFormTheming(state.doc.theme)
+  const logoUrl = parseThemeConfig(state.doc.theme).logoUrl
 
   return (
     <main
@@ -267,6 +269,14 @@ export function Canvas() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 [background:var(--canvas-vignette)]"
       />
+      {logoUrl !== undefined && (
+        // biome-ignore lint/performance/noImgElement: user-supplied logo host — next/image would need remotePatterns for arbitrary origins
+        <img
+          src={logoUrl}
+          alt=""
+          className="absolute top-[18px] left-[22px] z-[2] max-h-[34px] max-w-[150px] object-contain"
+        />
+      )}
       {/* progress track — answerable blocks only (design §5) */}
       {answerable.length > 0 && (
         <div className="absolute top-7 left-1/2 h-[3px] w-[min(560px,60%)] -translate-x-1/2 rounded-full bg-line/70">

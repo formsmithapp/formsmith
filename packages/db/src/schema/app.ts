@@ -93,6 +93,8 @@ export const responses = pgTable(
     variables: jsonb('variables').$type<Record<string, unknown>>().notNull(),
     hidden: jsonb('hidden').$type<Record<string, string>>().notNull().default({}),
     ending: text('ending'),
+    /** Verified AI exchange transcript + decisions (S4). Null = no AI on the path. */
+    aiTrace: jsonb('ai_trace').$type<unknown[]>(),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

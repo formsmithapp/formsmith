@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { MailAdapter, QueueAdapter } from '@formsmithapp/adapters'
+import { generateFollowup, generateFormDocument, type ModelProvider } from '@formsmithapp/ai'
 import type { Database } from '@formsmithapp/db'
 import {
   apiKeysRepository,
@@ -13,9 +14,11 @@ import {
 } from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
 import {
+  aiFollowupInput,
   createApiKeyInput,
   createFormInput,
   createWebhookInput,
+  generateFormInput,
   importInput,
   submissionInput,
   updateFormInput,
@@ -23,7 +26,9 @@ import {
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, eq } from 'drizzle-orm'
 import { createMiddleware } from 'hono/factory'
+import { type ExchangeTuple, signExchange, verifyExchange } from './ai-sign'
 import { generateApiKey, generateWebhookSecret, hashApiKey } from './keys'
+import { createRateLimiter } from './rate-limit'
 import { evaluate, isUuid, validateFormDocument } from './service'
 import { WEBHOOK_RETRY } from './workers'
 
@@ -41,6 +46,11 @@ export interface ApiDeps {
   /** Background jobs (webhooks, notifications). Absent → integrations 503. */
   queue?: QueueAdapter
   mail?: MailAdapter
+  /** The AI provider chain. Absent → ai_followup blocks run fallback-only. */
+  ai?: { provider: ModelProvider }
+  /** Signs AI exchanges (incl. the fallback path, which works with AI off).
+   * Absent → no exchange loop at all (base questions only). */
+  signingSecret?: string
 }
 
 interface Env {
@@ -75,6 +85,14 @@ const responseRowDto = z.object({
   variables: z.record(z.string(), z.unknown()),
   hidden: z.record(z.string(), z.string()),
   ending: z.string().nullable(),
+  aiTrace: z.array(z.unknown()).nullable(),
+})
+const aiStepDto = z.object({
+  done: z.boolean(),
+  reason: z.string().optional(),
+  question: z.string().optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+  sig: z.string().optional(),
 })
 const usageBucketDto = z.object({ day: z.string(), requests: z.number() })
 const apiKeyDto = z.object({
@@ -219,6 +237,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     variables: Record<string, unknown>
     hidden: Record<string, string>
     ending: string | null
+    aiTrace: unknown[] | null
   }) => ({ ...row, submittedAt: row.submittedAt.toISOString() })
 
   const app = new OpenAPIHono<Env>().basePath(basePath)
@@ -277,6 +296,36 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       const outcome = evaluate(snapshot.doc, payload)
       if (!outcome.ok) return c.json({ error: 'rejected', issues: outcome.issues }, 422)
 
+      // AI exchanges: every server-issued question carries a signature — an
+      // unverifiable exchange means a forged transcript. Reject, don't strip.
+      let aiTrace: unknown[] | null = null
+      if (payload.aiExchanges !== undefined && payload.aiExchanges.length > 0) {
+        const secret = deps.signingSecret
+        if (secret === undefined) {
+          return c.json({ error: 'ai_trace_invalid', issues: [] }, 422)
+        }
+        for (const exchange of payload.aiExchanges) {
+          const tuple: ExchangeTuple = {
+            formId: id,
+            ref: exchange.ref,
+            index: exchange.index,
+            question: exchange.question,
+            meta: exchange.meta,
+          }
+          if (!verifyExchange(secret, tuple, exchange.sig)) {
+            return c.json({ error: 'ai_trace_invalid', issues: [] }, 422)
+          }
+        }
+        aiTrace = payload.aiExchanges.map((exchange) => ({
+          ref: exchange.ref,
+          index: exchange.index,
+          question: exchange.question,
+          answer: exchange.answer,
+          ...exchange.meta,
+          verified: true,
+        }))
+      }
+
       const row = await responses.insert({
         formId: id,
         formVersion: snapshot.version,
@@ -284,6 +333,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         variables: outcome.variables,
         hidden: payload.hiddenFields ?? {},
         ending: outcome.ending,
+        aiTrace,
       })
 
       // integrations are queued post-commit and must never fail the submission
@@ -311,6 +361,124 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         }
       }
       return c.json(responseJson(row), 201)
+    },
+  )
+
+  /* ---------- public: the AI follow-up exchange ---------- */
+
+  // in-slice guard: this endpoint spends the operator's LLM budget
+  const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 30 })
+  const clientIp = (headers: Headers) =>
+    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/f/{id}/ai',
+      tags: ['public'],
+      summary: 'Request the next AI follow-up in an exchange (signed)',
+      request: { params: idParam, body: jsonBody(aiFollowupInput) },
+      responses: {
+        200: jsonResponse(aiStepDto, 'A signed question, or done'),
+        404: jsonResponse(errorDto, 'Unknown form / not an ai_followup block'),
+        422: jsonResponse(errorDto, 'Tampered exchange history'),
+        429: jsonResponse(errorDto, 'Rate limited'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      if (!aiLimiter.allow(`${clientIp(c.req.raw.headers)}:${id}`)) {
+        return c.json({ error: 'rate limited' }, 429)
+      }
+      const input = c.req.valid('json')
+      const secret = deps.signingSecret
+      if (secret === undefined) return c.json({ done: true, reason: 'ai_unconfigured' }, 200)
+
+      const snapshot = await forms.getPublicSnapshot(id)
+      const block = snapshot?.blocks.find((b) => b.ref === input.ref && b.type === 'ai_followup')
+      if (snapshot === undefined || snapshot === null || block === undefined) {
+        return c.json(NOT_FOUND, 404)
+      }
+      const properties = (block.properties ?? {}) as {
+        goal?: string
+        maxFollowups?: number
+        fallbackQuestion?: string
+      }
+      const maxFollowups = Math.min(Math.max(properties.maxFollowups ?? 1, 1), 5)
+      if (input.index > maxFollowups) return c.json({ done: true, reason: 'cap' }, 200)
+
+      // prior exchanges must be authentic before they enter a prompt
+      for (const exchange of input.exchanges) {
+        const tuple: ExchangeTuple = {
+          formId: id,
+          ref: input.ref,
+          index: exchange.index,
+          question: exchange.question,
+          meta: exchange.meta,
+        }
+        if (!verifyExchange(secret, tuple, exchange.sig)) {
+          return c.json({ error: 'ai_trace_invalid' }, 422)
+        }
+      }
+
+      const issue = (question: string, meta: Record<string, unknown>) => {
+        const sig = signExchange(secret, {
+          formId: id,
+          ref: input.ref,
+          index: input.index,
+          question,
+          meta,
+        })
+        return c.json({ done: false, question, meta, sig }, 200)
+      }
+      const fallbackMeta = (reason: string) => ({
+        fallback: true,
+        reason,
+        model: deps.ai?.provider.name ?? null,
+      })
+
+      if (deps.ai === undefined) {
+        // AI off: the static fallback IS follow-up #1; nothing after it
+        if (input.index === 1 && properties.fallbackQuestion !== undefined) {
+          return issue(properties.fallbackQuestion, fallbackMeta('ai_off'))
+        }
+        return c.json({ done: true, reason: 'ai_off' }, 200)
+      }
+
+      const started = Date.now()
+      const outcome = await generateFollowup(deps.ai.provider, {
+        goal: properties.goal ?? block.title,
+        formTitle: snapshot.title ?? 'this form',
+        baseQuestion: block.title,
+        baseAnswer: input.baseAnswer,
+        exchanges: input.exchanges.map((e) => ({ question: e.question, answer: e.answer })),
+        index: input.index,
+        maxFollowups,
+      })
+      const latencyMs = Date.now() - started
+
+      if (outcome.kind === 'question') {
+        return issue(outcome.question, {
+          fallback: false,
+          type: outcome.type,
+          engagement: Number(outcome.engagement.toFixed(3)),
+          model: deps.ai.provider.name,
+          latencyMs,
+        })
+      }
+      if (
+        outcome.kind === 'failed' &&
+        input.index === 1 &&
+        properties.fallbackQuestion !== undefined
+      ) {
+        // the degradation path §12 #2: seamless static fallback, audited
+        return issue(properties.fallbackQuestion, {
+          ...fallbackMeta(`error:${outcome.reason}`),
+          latencyMs,
+        })
+      }
+      return c.json({ done: true, reason: outcome.kind === 'stop' ? outcome.reason : 'error' }, 200)
     },
   )
 
@@ -768,6 +936,41 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     },
   )
 
+  /* ---------- AI form generation (session-only: the owner's key, the owner's click) ---------- */
+
+  const generateLimiter = createRateLimiter({ windowMs: 3_600_000, max: 10 })
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms/generate',
+      tags: ['forms'],
+      summary: 'Generate a draft form from a prompt (AI)',
+      request: { body: jsonBody(generateFormInput) },
+      responses: {
+        201: jsonResponse(storedFormDto, 'The generated DRAFT — review it in the builder'),
+        403: jsonResponse(errorDto, 'Session-only'),
+        422: jsonResponse(errorDto, 'Generation produced no valid form'),
+        429: jsonResponse(errorDto, 'Rate limited'),
+        503: jsonResponse(errorDto, 'AI not configured'),
+      },
+    }),
+    async (c) => {
+      if (c.get('authVia') !== 'session') return c.json({ error: 'session required' }, 403)
+      if (deps.ai === undefined) return c.json({ error: 'ai not configured' }, 503)
+      const workspaceId = c.get('workspaceId')
+      if (!generateLimiter.allow(workspaceId)) return c.json({ error: 'rate limited' }, 429)
+      const { prompt } = c.req.valid('json')
+      try {
+        const doc = await generateFormDocument(deps.ai.provider, prompt)
+        const row = await forms.create(workspaceId, doc, doc.title)
+        return c.json(stored(row), 201)
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : 'generation failed' }, 422)
+      }
+    },
+  )
+
   /* ---------- meta & import ---------- */
 
   app.openapi(
@@ -777,10 +980,20 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       tags: ['meta'],
       summary: 'Instance capabilities (drives UI hints)',
       responses: {
-        200: jsonResponse(z.object({ mailConfigured: z.boolean() }), 'Capabilities'),
+        200: jsonResponse(
+          z.object({ mailConfigured: z.boolean(), aiConfigured: z.boolean() }),
+          'Capabilities',
+        ),
       },
     }),
-    async (c) => c.json({ mailConfigured: deps.mail?.configured ?? false }, 200),
+    async (c) =>
+      c.json(
+        {
+          mailConfigured: deps.mail?.configured ?? false,
+          aiConfigured: deps.ai !== undefined,
+        },
+        200,
+      ),
   )
 
   app.openapi(

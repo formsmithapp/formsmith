@@ -4,6 +4,7 @@
 import type { FormEngine } from '@formsmithapp/engine'
 import {
   type CSSProperties,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -11,6 +12,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { AiExchangeView } from './AiExchange'
 import {
   EngineContext,
   OptionsContext,
@@ -21,7 +23,29 @@ import {
 import { choicesOf, commitChoice, isChoiceLike, scaleRange, scheduleAdvance } from './helpers'
 import { DownIcon, UpIcon } from './icons'
 import { Stage } from './Stage'
-import { createRetryQueue, type QueueStatus, type SubmissionPayload } from './submission'
+import {
+  type AiExchangeEntry,
+  createRetryQueue,
+  type QueueStatus,
+  type SubmissionPayload,
+} from './submission'
+
+/** Host-provided follow-up fetcher (the /f/:id/ai endpoint in the web app). */
+export type AiFollowupHandler = (ctx: {
+  ref: string
+  baseAnswer: unknown
+  exchanges: AiExchangeEntry[]
+  index: number
+}) => Promise<{ question: string; meta: Record<string, unknown>; sig: string } | null>
+
+interface AiSession {
+  ref: string
+  index: number
+  question: string | null
+  meta: Record<string, unknown>
+  sig: string
+  busy: boolean
+}
 
 export interface FormRuntimeProps {
   engine: FormEngine
@@ -39,6 +63,15 @@ export interface FormRuntimeProps {
    * the HOST (`deriveTheme` in @formsmithapp/ui) — the runtime stays dumb.
    */
   themeVars?: Record<string, string>
+  /**
+   * Enables the AI follow-up exchange loop on `ai_followup` blocks. The
+   * runtime stays dumb: it renders whatever signed question the host fetches
+   * and carries the exchanges on the submission payload. Absent → the block
+   * behaves like a plain question (base answer only).
+   */
+  onAiFollowup?: AiFollowupHandler
+  /** Author's logo (ThemeConfig.logoUrl) — compact, top-left of the stage. */
+  logoUrl?: string
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -68,6 +101,112 @@ export function FormRuntime(props: FormRuntimeProps) {
     [props.aiDisclosure, props.branding, props.onRedirect],
   )
 
+  /* ---------- the AI follow-up exchange loop (D0: inside the block) ---------- */
+  // Exchange answers NEVER touch the engine or the form document — they ride
+  // the submission payload as server-signed exchanges. The engine stays
+  // AI-agnostic; interception happens by wrapping `next()`/`prev()`.
+  const onAiFollowup = props.onAiFollowup
+  const [aiSession, setAiSession] = useState<AiSession | null>(null)
+  const aiSessionRef = useRef<AiSession | null>(null)
+  aiSessionRef.current = aiSession
+  const aiExchangesRef = useRef<AiExchangeEntry[]>([])
+  const aiDoneRef = useRef<Set<string>>(new Set())
+  const aiSubmitRef = useRef<(() => void) | null>(null)
+
+  const finishAiSession = useCallback(
+    (ref: string) => {
+      aiDoneRef.current.add(ref)
+      setAiSession(null)
+      engine.next()
+    },
+    [engine],
+  )
+
+  const requestFollowup = useCallback(
+    (ref: string, index: number) => {
+      if (onAiFollowup === undefined) return
+      setAiSession({ ref, index, question: null, meta: {}, sig: '', busy: true })
+      const exchanges = aiExchangesRef.current.filter((entry) => entry.ref === ref)
+      onAiFollowup({ ref, baseAnswer: engine.getState().answers[ref], exchanges, index })
+        .then((step) => {
+          if (aiSessionRef.current?.ref !== ref) return // session exited meanwhile
+          if (step === null) finishAiSession(ref)
+          else {
+            setAiSession({
+              ref,
+              index,
+              question: step.question,
+              meta: step.meta,
+              sig: step.sig,
+              busy: false,
+            })
+          }
+        })
+        .catch(() => {
+          if (aiSessionRef.current?.ref === ref) finishAiSession(ref)
+        })
+    },
+    [engine, onAiFollowup, finishAiSession],
+  )
+
+  const submitExchange = useCallback(
+    (answer: string) => {
+      const session = aiSessionRef.current
+      if (session === null || session.busy || session.question === null) return
+      if (answer.trim() === '') {
+        finishAiSession(session.ref) // declining to elaborate is allowed
+        return
+      }
+      aiExchangesRef.current.push({
+        ref: session.ref,
+        index: session.index,
+        question: session.question,
+        meta: session.meta,
+        sig: session.sig,
+        answer,
+      })
+      requestFollowup(session.ref, session.index + 1)
+    },
+    [finishAiSession, requestFollowup],
+  )
+
+  // Every next()/prev() call site (keyboard, chevrons, OK buttons, controls)
+  // goes through this wrapper — the engine object is plain closures, so a
+  // spread-and-override is safe and children need zero changes.
+  const runtimeEngine: FormEngine = useMemo(() => {
+    if (onAiFollowup === undefined) return engine
+    const stay = (): { ok: boolean; block: ReturnType<typeof engine.getCurrentBlock> } => ({
+      ok: false,
+      block: engine.getCurrentBlock(),
+    })
+    return {
+      ...engine,
+      next: () => {
+        const session = aiSessionRef.current
+        if (session !== null) {
+          if (!session.busy) aiSubmitRef.current?.()
+          return stay()
+        }
+        const block = engine.getCurrentBlock()
+        if (block?.type === 'ai_followup' && !aiDoneRef.current.has(block.ref)) {
+          const base = engine.getState().answers[block.ref]
+          if (typeof base === 'string' && base.trim() !== '') {
+            requestFollowup(block.ref, 1)
+            return stay()
+          }
+        }
+        return engine.next()
+      },
+      prev: () => {
+        if (aiSessionRef.current !== null) {
+          setAiSession(null) // first prev exits the exchange, back to the base question
+          return stay()
+        }
+        return engine.prev()
+      },
+    }
+  }, [engine, onAiFollowup, requestFollowup])
+
   // Optimistic delivery: ending shows immediately, the queue keeps retrying.
   // The queue is created INSIDE the effect so StrictMode's double-invoke
   // (mount → cleanup → mount) gets a fresh queue instead of a disposed one.
@@ -85,6 +224,7 @@ export function FormRuntime(props: FormRuntimeProps) {
         answers,
         variables,
         hiddenFields: engine.getState().hidden,
+        aiExchanges: aiExchangesRef.current.length > 0 ? [...aiExchangesRef.current] : undefined,
       })
     })
     return () => {
@@ -136,7 +276,7 @@ export function FormRuntime(props: FormRuntimeProps) {
 
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
-        engine.next()
+        runtimeEngine.next()
         return
       }
       if (event.key === 'Enter') return // Shift+Enter belongs to the control (textarea newline)
@@ -177,10 +317,10 @@ export function FormRuntime(props: FormRuntimeProps) {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [engine])
+  }, [engine, runtimeEngine])
 
   return (
-    <EngineContext.Provider value={engine}>
+    <EngineContext.Provider value={runtimeEngine}>
       <OptionsContext.Provider value={options}>
         <SubmissionContext.Provider value={queueStatus}>
           <div
@@ -189,6 +329,7 @@ export function FormRuntime(props: FormRuntimeProps) {
             style={props.themeVars as CSSProperties | undefined}
             ref={rootRef}
           >
+            {props.logoUrl !== undefined && <img className="fsr-logo" src={props.logoUrl} alt="" />}
             {showProgress && (
               <div
                 className="fsr-progress"
@@ -201,7 +342,19 @@ export function FormRuntime(props: FormRuntimeProps) {
                 <div className="fsr-progress-fill" style={{ width: `${progress.ratio * 100}%` }} />
               </div>
             )}
-            <Stage />
+            {aiSession !== null ? (
+              <AiExchangeView
+                question={aiSession.question}
+                busy={aiSession.busy}
+                aiDisclosure={options.aiDisclosure}
+                registerSubmit={(submit) => {
+                  aiSubmitRef.current = submit
+                }}
+                onSubmit={submitExchange}
+              />
+            ) : (
+              <Stage />
+            )}
             {state.status === 'in_progress' &&
               current !== null &&
               !SCREEN_TYPES.has(current.type) && (
@@ -209,12 +362,16 @@ export function FormRuntime(props: FormRuntimeProps) {
                   <button
                     type="button"
                     aria-label="Previous question"
-                    disabled={state.history.length === 0}
-                    onClick={() => engine.prev()}
+                    disabled={state.history.length === 0 && aiSession === null}
+                    onClick={() => runtimeEngine.prev()}
                   >
                     <UpIcon />
                   </button>
-                  <button type="button" aria-label="Next question" onClick={() => engine.next()}>
+                  <button
+                    type="button"
+                    aria-label="Next question"
+                    onClick={() => runtimeEngine.next()}
+                  >
                     <DownIcon />
                   </button>
                 </div>

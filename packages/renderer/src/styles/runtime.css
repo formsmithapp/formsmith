@@ -525,6 +525,17 @@
 
 /* ---- reduced motion ----
    Keep this block LAST: it wins by source order at equal specificity. */
+/* ---- author logo (ThemeConfig.logoUrl) ---- */
+.fsr-logo {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  z-index: 2;
+  max-height: 34px;
+  max-width: 150px;
+  object-fit: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fsr-root *,
   .fsr-root *::before,

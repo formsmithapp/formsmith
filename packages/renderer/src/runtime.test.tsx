@@ -307,3 +307,88 @@ it('has no serious or critical axe violations on screens and questions', async (
   )
   expect(seriousAtQuestion, JSON.stringify(seriousAtQuestion, null, 2)).toEqual([])
 })
+
+it('AI EXCHANGE LOOP: base answer → generated questions → exchanges ride the payload', async () => {
+  const onSubmit = vi.fn().mockResolvedValue(undefined)
+  const handler = vi.fn(
+    async ({ index }: { index: number }) =>
+      index <= 2
+        ? { question: `Mock follow-up ${index}?`, meta: { fallback: false }, sig: `sig-${index}` }
+        : null, // done after two follow-ups
+  )
+  const form: FormDefinition = {
+    id: 'f_ai',
+    blocks: [
+      {
+        id: 'b_ai',
+        ref: 'experience',
+        type: 'ai_followup',
+        title: 'How was setup?',
+        required: true,
+        properties: { goal: 'g', maxFollowups: 2, fallbackQuestion: 'Hardest part?' },
+      },
+      { id: 'b_end', ref: 'end', type: 'thankyou', title: 'Done!', required: false },
+    ],
+  }
+  const { engine, host } = mountForm(form, {
+    onSubmit,
+    onAiFollowup: handler as never,
+  })
+  await settled(host, 'How was setup?')
+  await userEvent.keyboard('It kept failing on SMTP{Enter}')
+
+  // exchange 1
+  await vi.waitFor(() => expect(host.querySelector('h1')?.textContent).toBe('Mock follow-up 1?'))
+  expect(host.querySelector('.fsr-ai-tag')?.textContent).toContain('AI-generated')
+  await userEvent.keyboard('The TLS port{Enter}')
+
+  // exchange 2
+  await vi.waitFor(() => expect(host.querySelector('h1')?.textContent).toBe('Mock follow-up 2?'))
+  await userEvent.keyboard('Yes, fixed now{Enter}')
+
+  // handler returns null on index 3 → session ends → ending reached
+  await settled(host, 'Done!')
+  expect(engine.getState().answers.experience).toBe('It kept failing on SMTP') // base answer intact
+
+  await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+  const payload = onSubmit.mock.calls[0]?.[0] as {
+    aiExchanges: { index: number; question: string; answer: string; sig: string }[]
+  }
+  expect(payload.aiExchanges).toHaveLength(2)
+  expect(payload.aiExchanges[0]).toMatchObject({
+    index: 1,
+    question: 'Mock follow-up 1?',
+    answer: 'The TLS port',
+    sig: 'sig-1',
+  })
+})
+
+it('AI EXCHANGE: handler failure/absence degrades to plain advancement', async () => {
+  const failing = vi.fn(async () => {
+    throw new Error('endpoint down')
+  })
+  const form: FormDefinition = {
+    id: 'f_ai2',
+    blocks: [
+      {
+        id: 'b_ai',
+        ref: 'exp',
+        type: 'ai_followup',
+        title: 'Thoughts?',
+        required: false,
+        properties: { goal: 'g', maxFollowups: 1, fallbackQuestion: 'FB?' },
+      },
+      { id: 'b_end', ref: 'end', type: 'thankyou', title: 'Bye!', required: false },
+    ],
+  }
+  const { host } = mountForm(form, { onAiFollowup: failing as never })
+  await settled(host, 'Thoughts?')
+  await userEvent.keyboard('Something thoughtful{Enter}')
+  await settled(host, 'Bye!') // dead handler → no exchange, no error, just onward
+
+  // and empty answers skip the loop entirely
+  const plain = mountForm(form)
+  await settled(plain.host, 'Thoughts?')
+  await userEvent.keyboard('{Enter}') // optional + empty + no handler involvement
+  await settled(plain.host, 'Bye!')
+})

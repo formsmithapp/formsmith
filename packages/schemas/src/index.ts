@@ -5,12 +5,18 @@
 export { type ThemeConfig, themeConfigSchema } from '@formsmithapp/ui'
 export { type FormDocumentShape, formDocumentSchema } from './document'
 export {
+  type AiExchange,
+  type AiFollowupInput,
+  aiExchange,
+  aiFollowupInput,
   type CreateApiKeyInput,
   type CreateFormInput,
   type CreateWebhookInput,
   createApiKeyInput,
   createFormInput,
   createWebhookInput,
+  type GenerateFormInput,
+  generateFormInput,
   type ImportFormEntry,
   type ImportInput,
   importFormEntry,

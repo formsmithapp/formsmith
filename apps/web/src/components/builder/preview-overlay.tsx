@@ -3,7 +3,8 @@
 'use client'
 
 import { createEngine, FormValidationError } from '@formsmithapp/engine'
-import { FormRuntime } from '@formsmithapp/renderer'
+import { type AiFollowupHandler, FormRuntime } from '@formsmithapp/renderer'
+import { parseThemeConfig } from '@formsmithapp/ui'
 import { X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useFormTheming } from '../use-theme'
@@ -51,14 +52,31 @@ export function PreviewOverlay({
     onToast('Preview response recorded — nothing is saved')
   }, [onToast])
 
+  // preview shows the honest AI-OFF experience: the static fallback question
+  // plays follow-up #1 (nothing is submitted, so the preview sig never travels)
+  const previewAiFollowup: AiFollowupHandler = useCallback(
+    async ({ ref, index }) => {
+      if (index > 1) return null
+      const block = store.getState().doc.blocks.find((b) => b.ref === ref)
+      const fallback = block?.properties?.fallbackQuestion
+      return typeof fallback === 'string' && fallback !== ''
+        ? { question: fallback, meta: { fallback: true, preview: true }, sig: 'preview' }
+        : null
+    },
+    [store],
+  )
+  const logoUrl = parseThemeConfig(store.getState().doc.theme).logoUrl
+
   return (
     <div className="fixed inset-0 z-50 bg-canvas">
       {'engine' in session && session.engine !== undefined ? (
         <FormRuntime
           engine={session.engine}
           onSubmit={handleSubmit}
+          onAiFollowup={previewAiFollowup}
           theme={theming?.appearance ?? chromeTheme}
           themeVars={theming?.vars}
+          logoUrl={logoUrl}
         />
       ) : (
         <div className="grid h-full place-items-center">

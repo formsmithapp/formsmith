@@ -22,6 +22,18 @@ export interface ResponsePayload {
   answers: Record<string, unknown>
   variables?: Record<string, unknown>
   hiddenFields?: Record<string, string>
+  /** Signed AI exchange tuples from the runtime — the server verifies each sig. */
+  aiExchanges?: AiExchangePayload[]
+}
+
+/** The wire shape of one signed exchange (issued by POST /f/:id/ai). */
+export interface AiExchangePayload {
+  ref: string
+  index: number
+  question: string
+  meta: Record<string, unknown>
+  sig: string
+  answer: string
 }
 
 export interface StoredResponse {
@@ -37,6 +49,22 @@ export interface StoredResponse {
   hidden: Record<string, string>
   /** Ref of the ending block the path reached, or null. */
   ending: string | null
+  /** Server-verified AI exchange transcript (S4). */
+  aiTrace?: AiTraceEntry[] | null
+}
+
+export interface AiTraceEntry {
+  ref: string
+  index: number
+  question: string
+  answer: string
+  fallback?: boolean
+  type?: string
+  engagement?: number
+  model?: string | null
+  latencyMs?: number
+  reason?: string
+  verified?: boolean
 }
 
 export class SubmissionRejectedError extends Error {

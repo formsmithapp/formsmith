@@ -16,6 +16,17 @@ export const updateFormInput = z.strictObject({
   doc: formDocumentSchema,
 })
 
+/** A server-issued AI exchange returned by the client. `sig` proves the
+ * server generated `question`+`meta`; the answer alone is untrusted input. */
+export const aiExchange = z.strictObject({
+  ref: z.string().max(200),
+  index: z.number().int().min(1).max(5),
+  question: z.string().max(500),
+  meta: z.record(z.string(), z.unknown()),
+  sig: z.string().max(128),
+  answer: z.string().max(10_000),
+})
+
 /** Mirrors the renderer's SubmissionPayload / the engine's Submission. */
 export const submissionInput = z.strictObject({
   formVersion: z.number().int().positive().optional(),
@@ -23,6 +34,24 @@ export const submissionInput = z.strictObject({
   /** Client-computed — cross-checked server-side, never trusted. */
   variables: z.record(z.string().max(200), z.unknown()).optional(),
   hiddenFields: z.record(z.string().max(200), z.string().max(1_000)).optional(),
+  /** AI follow-up exchanges — every sig is verified server-side. */
+  aiExchanges: z.array(aiExchange).max(10).optional(),
+})
+
+/** `POST /f/:id/ai` — request the next follow-up in an exchange. */
+export const aiFollowupInput = z.strictObject({
+  ref: z.string().max(200),
+  index: z.number().int().min(1).max(5),
+  baseAnswer: z.string().max(10_000),
+  exchanges: z
+    .array(aiExchange.omit({ ref: true }))
+    .max(5)
+    .default([]),
+})
+
+/** `POST /forms/generate` — AI form generation (session-only). */
+export const generateFormInput = z.strictObject({
+  prompt: z.string().min(3).max(500),
 })
 
 export const responseDto = z.strictObject({
@@ -91,3 +120,6 @@ export type ImportFormEntry = z.infer<typeof importFormEntry>
 export type ImportInput = z.infer<typeof importInput>
 export type CreateApiKeyInput = z.infer<typeof createApiKeyInput>
 export type CreateWebhookInput = z.infer<typeof createWebhookInput>
+export type AiExchange = z.infer<typeof aiExchange>
+export type AiFollowupInput = z.infer<typeof aiFollowupInput>
+export type GenerateFormInput = z.infer<typeof generateFormInput>

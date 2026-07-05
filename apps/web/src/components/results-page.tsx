@@ -167,6 +167,7 @@ function ResponseDetail({
       <dl className="mt-4 space-y-4">
         {blocks.map((block) => {
           const value = response.answers[block.ref]
+          const exchanges = (response.aiTrace ?? []).filter((entry) => entry.ref === block.ref)
           return (
             <div key={block.id}>
               <dt className="text-[12px] font-medium text-fg-2">
@@ -179,6 +180,32 @@ function ResponseDetail({
                   <span className="text-fg-3">—</span>
                 )}
               </dd>
+              {exchanges.map((exchange) => (
+                <div
+                  key={`${exchange.ref}-${exchange.index}`}
+                  className="mt-2 ml-3 border-l-2 border-brand/25 pl-3"
+                >
+                  <p className="eyebrow flex items-center gap-1.5 text-brand">
+                    ✦ AI follow-up {exchange.index}
+                    {exchange.fallback === true && <span className="text-warn">· fallback</span>}
+                  </p>
+                  <p className="mt-1 text-[12.5px] text-fg-2">{exchange.question}</p>
+                  <p className="mt-0.5 text-[14px]">{exchange.answer}</p>
+                  <p className="mt-0.5 font-mono text-[10px] text-fg-3">
+                    {[
+                      exchange.type,
+                      exchange.model ?? undefined,
+                      exchange.latencyMs !== undefined ? `${exchange.latencyMs}ms` : undefined,
+                      exchange.engagement !== undefined
+                        ? `engagement ${exchange.engagement}`
+                        : undefined,
+                      exchange.verified === true ? 'verified' : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+              ))}
             </div>
           )
         })}

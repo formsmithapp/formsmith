@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { InMemoryQueue } from '@formsmithapp/adapters'
+import { createMockProvider } from '@formsmithapp/ai'
 import { createWorkspaceWithOwner, type Database, schema } from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
 import { drizzle } from 'drizzle-orm/pglite'
@@ -85,6 +86,8 @@ beforeEach(async () => {
     db,
     getSession: async () => (currentUser === null ? null : { userId: currentUser }),
     queue,
+    ai: { provider: createMockProvider() },
+    signingSecret: 'test-signing-secret',
   })
 })
 
@@ -366,5 +369,165 @@ describe('S3: meta + openapi', () => {
     expect(Object.keys(body.paths)).toEqual(
       expect.arrayContaining(['/api/v1/f/{id}', '/api/v1/forms', '/api/v1/api-keys']),
     )
+  })
+})
+
+describe('S4: the AI exchange', () => {
+  async function publishedAiForm(): Promise<string> {
+    const doc: FormDefinition = {
+      id: 'seed',
+      title: 'Interview',
+      blocks: [
+        { id: 'b_w', ref: 'welcome', type: 'welcome', title: 'Hi', required: false },
+        {
+          id: 'b_ai',
+          ref: 'experience',
+          type: 'ai_followup',
+          title: 'Tell me about your setup experience.',
+          required: true,
+          properties: {
+            goal: 'find friction points',
+            maxFollowups: 2,
+            fallbackQuestion: 'What was the hardest part of setup?',
+          },
+        },
+        { id: 'b_end', ref: 'thanks', type: 'thankyou', title: 'Bye', required: false },
+      ],
+      logic: [],
+      variables: [],
+      settings: {},
+    }
+    const res = await app.request('/api/v1/forms', json({ doc }))
+    const { form } = (await res.json()) as { form: FormDefinition }
+    await app.request(`/api/v1/forms/${form.id}/publish`, { method: 'POST' })
+    currentUser = null // respondent
+    return form.id
+  }
+
+  it('issues signed questions, honors the cap, and the exchanges submit verifiably', async () => {
+    const id = await publishedAiForm()
+    const engaged = 'I struggled because the SMTP settings failed on my server every time'
+
+    const step1 = (await (
+      await app.request(
+        `/api/v1/f/${id}/ai`,
+        json({ ref: 'experience', index: 1, baseAnswer: engaged, exchanges: [] }),
+      )
+    ).json()) as { done: boolean; question: string; meta: Record<string, unknown>; sig: string }
+    expect(step1.done).toBe(false)
+    expect(step1.question).toContain('?')
+    expect(step1.meta.fallback).toBe(false)
+    expect(step1.sig).toMatch(/^[0-9a-f]{64}$/)
+
+    // over the cap → done
+    const capped = (await (
+      await app.request(
+        `/api/v1/f/${id}/ai`,
+        json({ ref: 'experience', index: 3, baseAnswer: engaged, exchanges: [] }),
+      )
+    ).json()) as { done: boolean; reason: string }
+    expect(capped).toMatchObject({ done: true, reason: 'cap' })
+
+    // submit with the verified exchange → trace persisted
+    const submit = await app.request(
+      `/api/v1/f/${id}/responses`,
+      json({
+        answers: { experience: engaged },
+        aiExchanges: [
+          {
+            ref: 'experience',
+            index: 1,
+            question: step1.question,
+            meta: step1.meta,
+            sig: step1.sig,
+            answer: 'It was the TLS port mismatch mainly',
+          },
+        ],
+      }),
+    )
+    expect(submit.status).toBe(201)
+    const stored = (await submit.json()) as { aiTrace: { question: string; verified: boolean }[] }
+    expect(stored.aiTrace).toHaveLength(1)
+    expect(stored.aiTrace[0]).toMatchObject({ question: step1.question, verified: true })
+
+    // tampered exchange → rejected wholesale
+    const tampered = await app.request(
+      `/api/v1/f/${id}/responses`,
+      json({
+        answers: { experience: engaged },
+        aiExchanges: [
+          {
+            ref: 'experience',
+            index: 1,
+            question: 'The AI never asked this?',
+            meta: step1.meta,
+            sig: step1.sig,
+            answer: 'forged',
+          },
+        ],
+      }),
+    )
+    expect(tampered.status).toBe(422)
+    expect(((await tampered.json()) as { error: string }).error).toBe('ai_trace_invalid')
+  })
+
+  it('provider death at follow-up #1 → the SIGNED static fallback (§12 #2)', async () => {
+    const id = await publishedAiForm()
+    const step = (await (
+      await app.request(
+        `/api/v1/f/${id}/ai`,
+        json({
+          ref: 'experience',
+          index: 1,
+          baseAnswer: 'I loved it because FAIL_AI it saved me hours of work',
+          exchanges: [],
+        }),
+      )
+    ).json()) as { done: boolean; question: string; meta: Record<string, unknown>; sig: string }
+    expect(step.done).toBe(false)
+    expect(step.question).toBe('What was the hardest part of setup?')
+    expect(step.meta.fallback).toBe(true)
+    expect(step.sig).toMatch(/^[0-9a-f]{64}$/) // the degradation path is signed too
+  })
+
+  it('disengaged answers stop the loop; rate limiting kicks in', async () => {
+    const id = await publishedAiForm()
+    const stop = (await (
+      await app.request(
+        `/api/v1/f/${id}/ai`,
+        json({ ref: 'experience', index: 1, baseAnswer: 'no', exchanges: [] }),
+      )
+    ).json()) as { done: boolean; reason: string }
+    expect(stop).toMatchObject({ done: true, reason: 'engagement' })
+
+    let limited = 0
+    for (let i = 0; i < 35; i++) {
+      const res = await app.request(
+        `/api/v1/f/${id}/ai`,
+        json({ ref: 'experience', index: 1, baseAnswer: 'no', exchanges: [] }),
+      )
+      if (res.status === 429) limited++
+    }
+    expect(limited).toBeGreaterThan(0)
+  })
+})
+
+describe('S4: form generation', () => {
+  it('generates a valid draft (session-only, ai-gated)', async () => {
+    const res = await app.request('/api/v1/forms/generate', json({ prompt: 'bakery feedback' }))
+    expect(res.status).toBe(201)
+    const { form } = (await res.json()) as { form: FormDefinition }
+    expect(form.blocks[0]?.type).toBe('welcome')
+    expect(form.blocks.length).toBeGreaterThanOrEqual(3)
+    // it publishes clean — the generated draft passes the same gate
+    const publish = await app.request(`/api/v1/forms/${form.id}/publish`, { method: 'POST' })
+    expect(publish.status).toBe(200)
+  })
+
+  it('meta reports aiConfigured', async () => {
+    const meta = (await (await app.request('/api/v1/meta')).json()) as {
+      aiConfigured: boolean
+    }
+    expect(meta.aiConfigured).toBe(true)
   })
 })

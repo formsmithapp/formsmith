@@ -10,9 +10,10 @@
  * components) and `@formsmithapp/renderer/fonts.css` (self-hosted webfonts).
  */
 
-export { FormRuntime, type FormRuntimeProps } from './FormRuntime'
+export { type AiFollowupHandler, FormRuntime, type FormRuntimeProps } from './FormRuntime'
 export { type MountedForm, type MountOptions, mount } from './mount'
 export {
+  type AiExchangeEntry,
   createRetryQueue,
   type QueueStatus,
   type RetryQueue,

@@ -1,7 +1,7 @@
 {
-  "name": "@formsmithapp/api",
+  "name": "@formsmithapp/ai",
   "version": "0.0.0",
-  "description": "Formsmith data-plane API (Hono) — mountable into the unified web build today, standalone-deployable (Node/Workers) tomorrow.",
+  "description": "Formsmith AI loop — LSDE engagement scoring, guarded follow-up generation, hedged model providers, and AI form generation.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -23,29 +23,22 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@formsmithapp/adapters": "workspace:*",
-    "@formsmithapp/ai": "workspace:*",
+    "@ai-sdk/anthropic": "^4.0.8",
+    "@ai-sdk/openai-compatible": "^3.0.5",
     "@formsmithapp/blocks": "workspace:*",
-    "@formsmithapp/db": "workspace:*",
     "@formsmithapp/engine": "workspace:*",
     "@formsmithapp/schemas": "workspace:*",
-    "@hono/node-server": "^2.0.8",
-    "@hono/zod-openapi": "^1.4.0",
-    "@hono/zod-validator": "^0.8.0",
-    "hono": "^4.12.27",
+    "ai": "^7.0.15",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.4",
     "@formsmithapp/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
-    "drizzle-orm": "^0.45.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"

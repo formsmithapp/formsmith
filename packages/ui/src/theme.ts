@@ -32,6 +32,12 @@ export const themeConfigSchema = z.object({
     .optional(),
   /** Keys into the FONT_PAIRS registry; unknown ids fall back to the default pair. */
   fontPair: z.string().default('editorial'),
+  /** Author-hosted logo (https) — uploads reuse this field when storage lands (v1.1). */
+  logoUrl: z
+    .url()
+    .max(2_000)
+    .refine((value) => value.startsWith('https://'), 'logo must be an https URL')
+    .optional(),
 })
 
 export type ThemeConfig = z.infer<typeof themeConfigSchema>

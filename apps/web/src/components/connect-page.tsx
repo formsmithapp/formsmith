@@ -227,9 +227,12 @@ export function ConnectPage({ id }: { id: string }) {
     (stored.data?.form.settings as { notifyOnSubmit?: boolean } | undefined)?.notifyOnSubmit ===
     true
   const toggleNotify = useMutation({
+    // fetch fresh inside the mutation — clicking before the page query
+    // settles must not silently no-op
     mutationFn: async (on: boolean) => {
-      const form = stored.data?.form as FormDefinition | undefined
-      if (form === undefined) return
+      const current = await getRepository().get(id)
+      if (current === null) throw new Error('form not found')
+      const form = current.form as FormDefinition
       await getRepository().save(id, {
         ...form,
         settings: { ...form.settings, notifyOnSubmit: on } as FormDefinition['settings'],

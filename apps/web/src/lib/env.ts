@@ -22,6 +22,20 @@ const envSchema = z.object({
   /** BYO SMTP — unset means notifications degrade gracefully (NoopMail). */
   SMTP_URL: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  /** BYO LLM — all optional; nothing set means AI off, fallbacks only. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  FORMSMITH_AI_MODEL: z.string().optional(),
+  OPENAI_COMPAT_BASE_URL: z.string().optional(),
+  OPENAI_COMPAT_API_KEY: z.string().optional(),
+  OPENAI_COMPAT_MODEL: z.string().optional(),
+  FORMSMITH_AI_FALLBACK_PROVIDER: z.enum(['anthropic', 'openai-compatible']).optional(),
+  FORMSMITH_AI_FALLBACK_API_KEY: z.string().optional(),
+  FORMSMITH_AI_FALLBACK_MODEL: z.string().optional(),
+  FORMSMITH_AI_FALLBACK_BASE_URL: z.string().optional(),
+  FORMSMITH_AI_HEDGE_MS: z.string().optional(),
+  FORMSMITH_AI_TIMEOUT_MS: z.string().optional(),
+  /** 'mock' enables the deterministic dev/test provider. */
+  FORMSMITH_AI: z.enum(['mock']).optional(),
 })
 
 export type ServerEnv = z.infer<typeof envSchema>
