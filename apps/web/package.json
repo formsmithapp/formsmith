@@ -16,6 +16,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "@formsmithapp/blocks": "workspace:*",
+    "@formsmithapp/db": "workspace:*",
     "@formsmithapp/engine": "workspace:*",
     "@formsmithapp/renderer": "workspace:*",
     "@formsmithapp/templates": "workspace:*",
@@ -26,10 +27,12 @@
     "@dnd-kit/utilities": "^3.2.0",
     "@radix-ui/react-dialog": "^1.1.0",
     "@radix-ui/react-switch": "^1.2.0",
+    "better-auth": "^1.6.23",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "lucide-react": "^0.550.0",
     "tailwind-merge": "^3.0.0",
+    "zod": "^4.4.3",
     "@formsmithapp/rules": "workspace:*"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ import { Copy, FileText, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { BrandMark } from '@/components/brand-mark'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { UserMenu } from '@/components/user-menu'
 import { getRepository } from '@/lib/repository/client'
 
 export default function FormsListPage() {
@@ -44,7 +45,10 @@ export default function FormsListPage() {
     <div className="mx-auto max-w-3xl px-6 py-10">
       <header className="flex items-center justify-between">
         <BrandMark />
-        <ThemeToggle />
+        <span className="flex items-center gap-3">
+          <UserMenu />
+          <ThemeToggle />
+        </span>
       </header>
 
       <div className="mt-12 flex items-end justify-between">

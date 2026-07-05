@@ -1,0 +1,26 @@
+# Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# DEV-ONLY infrastructure: a local Postgres for `pnpm dev` and the e2e suite.
+#   docker compose -f compose.dev.yml up -d
+# The production self-host compose file is a separate, later deliverable.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: formsmith
+      POSTGRES_PASSWORD: formsmith
+      POSTGRES_DB: formsmith
+    ports:
+      - '${FORMSMITH_PG_PORT:-5432}:5432'
+    volumes:
+      - formsmith-pg-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U formsmith -d formsmith']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  formsmith-pg-dev:
