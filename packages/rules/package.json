@@ -1,7 +1,7 @@
 {
-  "name": "@formsmithapp/engine",
+  "name": "@formsmithapp/rules",
   "version": "0.0.0",
-  "description": "Framework-agnostic Formsmith form engine (block-tree state machine, navigation, validation, piping).",
+  "description": "Formsmith rules engine — JSONLogic AST validation (untrusted input) and evaluation.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -28,13 +28,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@formsmithapp/rules": "workspace:*"
+    "json-logic-engine": "^5.0.7"
   },
   "devDependencies": {
     "@formsmithapp/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
-    "@vitest/browser": "^3.2.0",
-    "playwright": "^1.50.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"
