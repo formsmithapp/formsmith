@@ -41,8 +41,28 @@ export const paginationInput = z.strictObject({
   cursor: z.string().max(500).optional(),
 })
 
+/** Local-first migration: forms + published snapshots. NEVER responses —
+ * they were never server-verified. */
+export const importFormEntry = z.strictObject({
+  /** The browser-side id, echoed back so the client can clean up. */
+  sourceId: z.string().max(200),
+  doc: formDocumentSchema,
+  status: z.enum(['draft', 'published']).default('draft'),
+  publishedVersion: z.number().int().positive().optional(),
+  versions: z
+    .array(z.strictObject({ version: z.number().int().positive(), doc: formDocumentSchema }))
+    .max(100)
+    .default([]),
+})
+
+export const importInput = z.strictObject({
+  forms: z.array(importFormEntry).min(1).max(200),
+})
+
 export type CreateFormInput = z.infer<typeof createFormInput>
 export type UpdateFormInput = z.infer<typeof updateFormInput>
 export type SubmissionInput = z.infer<typeof submissionInput>
 export type ResponseDto = z.infer<typeof responseDto>
 export type PaginationInput = z.infer<typeof paginationInput>
+export type ImportFormEntry = z.infer<typeof importFormEntry>
+export type ImportInput = z.infer<typeof importInput>

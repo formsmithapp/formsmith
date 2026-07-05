@@ -1,13 +1,12 @@
 {
-  "name": "@formsmithapp/db",
+  "name": "@formsmithapp/api",
   "version": "0.0.0",
-  "description": "Formsmith data layer — Drizzle schema, migrations, and workspace-scoped repositories over Postgres.",
+  "description": "Formsmith data-plane API (Hono) — mountable into the unified web build today, standalone-deployable (Node/Workers) tomorrow.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
   "files": [
-    "dist",
-    "drizzle"
+    "dist"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -16,9 +15,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./migrations/*": "./drizzle/*",
-    "./package.json": "./package.json"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -26,24 +23,26 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate",
+    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@formsmithapp/blocks": "workspace:*",
+    "@formsmithapp/db": "workspace:*",
     "@formsmithapp/engine": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "drizzle-zod": "^0.8.3",
-    "postgres": "^3.4.5",
+    "@formsmithapp/schemas": "workspace:*",
+    "@hono/node-server": "^2.0.8",
+    "@hono/zod-validator": "^0.8.0",
+    "hono": "^4.12.27",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@formsmithapp/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"

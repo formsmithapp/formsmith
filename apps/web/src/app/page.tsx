@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, FileText, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { BrandMark } from '@/components/brand-mark'
+import { ImportBanner } from '@/components/import-banner'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
 import { getRepository } from '@/lib/repository/client'
@@ -66,6 +67,8 @@ export default function FormsListPage() {
           <Plus size={15} /> New form
         </button>
       </div>
+
+      <ImportBanner />
 
       <section className="mt-8">
         <h2 className="eyebrow text-fg-3">Start from a template</h2>
@@ -154,7 +157,7 @@ export default function FormsListPage() {
           <li className="rounded-[12px] border border-line border-dashed px-6 py-14 text-center">
             <p className="font-serif text-[19px] text-fg-2">No forms yet.</p>
             <p className="mt-1 text-[13px] text-fg-2">
-              Create your first form — it lives in this browser for now.
+              Create your first form — blank or from a template above.
             </p>
           </li>
         )}

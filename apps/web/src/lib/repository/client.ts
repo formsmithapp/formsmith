@@ -1,29 +1,30 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { LocalStorageFormsRepository } from './local'
-import { LocalStorageResponsesRepository, type ResponsesRepository } from './responses'
+import { HttpFormsRepository, HttpResponsesRepository } from './http'
+import type { ResponsesRepository } from './responses'
 import type { FormsRepository } from './types'
 
 let instance: FormsRepository | null = null
 let responsesInstance: ResponsesRepository | null = null
 
-/** Browser-side repository singleton. The api/db slice swaps this factory. */
+/**
+ * Browser-side repository singletons — since S2 these speak HTTP to the
+ * mounted data plane (/api/v1). The localStorage implementations remain in
+ * the tree as unit-test fixtures and as the import-banner's read source.
+ */
 export function getRepository(): FormsRepository {
   if (typeof window === 'undefined') {
-    throw new Error('The forms repository is browser-only in M1 (local-first)')
+    throw new Error('The forms repository is browser-only (server code reads the db directly)')
   }
-  if (instance === null) instance = new LocalStorageFormsRepository(window.localStorage)
+  if (instance === null) instance = new HttpFormsRepository()
   return instance
 }
 
-/** Browser-side responses singleton — same swap point as the forms repository. */
 export function getResponsesRepository(): ResponsesRepository {
   if (typeof window === 'undefined') {
-    throw new Error('The responses repository is browser-only in M4 (local-first)')
+    throw new Error('The responses repository is browser-only (server code reads the db directly)')
   }
-  if (responsesInstance === null) {
-    responsesInstance = new LocalStorageResponsesRepository(window.localStorage, getRepository())
-  }
+  if (responsesInstance === null) responsesInstance = new HttpResponsesRepository()
   return responsesInstance
 }

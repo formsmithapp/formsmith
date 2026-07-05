@@ -77,14 +77,11 @@ test('builder M1: create, compose, edit, undo, autosave, preview, publish', asyn
   await page.keyboard.press('Escape')
   await expect(page.locator('.fsr-root')).toHaveCount(0)
 
-  // publish → immutable snapshot v1 in the repository
+  // publish → immutable snapshot v1 in the repository (server-side since S2)
   await page.getByRole('button', { name: 'Publish' }).click()
   await expect(page.getByText('Published v1 — snapshot saved')).toBeVisible()
-  const snapshot = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem(`fs.form.${id}.v1`) ?? 'null'),
-    formId,
-  )
-  expect(snapshot?.version).toBe(1)
+  const snapshot = await (await page.request.get(`/api/v1/forms/${formId}/versions/1`)).json()
+  expect(snapshot?.form?.version).toBe(1)
 
   // draft edits never touch the published snapshot (reselect the question first —
   // the reload above reset selection to the welcome screen)
@@ -92,11 +89,8 @@ test('builder M1: create, compose, edit, undo, autosave, preview, publish', asyn
   await title.click()
   await title.fill('Edited after publishing')
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
-  const after = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem(`fs.form.${id}.v1`) ?? 'null'),
-    formId,
-  )
-  const titles = (after?.blocks ?? []).map((b: { title: string }) => b.title)
+  const after = await (await page.request.get(`/api/v1/forms/${formId}/versions/1`)).json()
+  const titles = (after?.form?.blocks ?? []).map((b: { title: string }) => b.title)
   expect(titles).toContain('How satisfied are you?')
   expect(titles).not.toContain('Edited after publishing')
 

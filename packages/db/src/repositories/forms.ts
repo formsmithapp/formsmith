@@ -121,6 +121,45 @@ export function formsRepository(db: Database) {
       return rows[0]?.doc ?? null
     },
 
+    /**
+     * Local-first migration: inserts a form WITH its published snapshots in
+     * one transaction. The ONLY path that writes `form_versions` outside
+     * `publish()` — exists solely for the browser-import flow.
+     */
+    async importForm(
+      workspaceId: string,
+      entry: {
+        doc: FormDefinition
+        status: 'draft' | 'published'
+        publishedVersion?: number
+        versions: { version: number; doc: FormDefinition }[]
+      },
+    ): Promise<FormRow> {
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(forms)
+          .values({
+            workspaceId,
+            title: entry.doc.title ?? 'Untitled form',
+            doc: entry.doc,
+            status: entry.status,
+            publishedVersion: entry.publishedVersion ?? null,
+          })
+          .returning()
+        if (row === undefined) throw new Error('form insert returned nothing')
+        const doc = { ...entry.doc, id: row.id }
+        await tx.update(forms).set({ doc }).where(eq(forms.id, row.id))
+        for (const snapshot of entry.versions) {
+          await tx.insert(formVersions).values({
+            formId: row.id,
+            version: snapshot.version,
+            doc: { ...snapshot.doc, id: row.id, version: snapshot.version },
+          })
+        }
+        return { ...row, doc }
+      })
+    },
+
     async duplicate(workspaceId: string, formId: string): Promise<FormRow | null> {
       const source = await this.get(workspaceId, formId)
       if (source === null) return null

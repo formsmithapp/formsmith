@@ -67,9 +67,8 @@ export function SharePage({ id }: { id: string }) {
                 Share your form
               </h1>
               <p className="mt-2 max-w-[52ch] text-[13.5px] leading-relaxed text-fg-2">
-                The live link serves the published snapshot — draft edits stay private until you
-                publish again. Until this workspace is connected to a server, the link works in this
-                browser only.
+                The live link serves the published snapshot — send it to anyone. Draft edits stay
+                private until you publish again.
               </p>
 
               <section className="mt-8">

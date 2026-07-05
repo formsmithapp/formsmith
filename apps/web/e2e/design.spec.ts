@@ -52,11 +52,8 @@ test('design tab themes canvas + preview live, publish pins the theme', async ({
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Publish' }).click()
   await expect(page.getByText('Published v1 — snapshot saved')).toBeVisible()
-  const snapshot = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem(`fs.form.${id}.v1`) ?? 'null'),
-    formId,
-  )
-  expect(snapshot?.theme).toMatchObject({
+  const snapshot = await (await page.request.get(`/api/v1/forms/${formId}/versions/1`)).json()
+  expect(snapshot?.form?.theme).toMatchObject({
     brandColor: '#7048e8',
     appearance: 'dark',
     fontPair: 'literary',

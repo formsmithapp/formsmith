@@ -7,6 +7,10 @@ export { type FormDocumentShape, formDocumentSchema } from './document'
 export {
   type CreateFormInput,
   createFormInput,
+  type ImportFormEntry,
+  type ImportInput,
+  importFormEntry,
+  importInput,
   type PaginationInput,
   paginationInput,
   type ResponseDto,
