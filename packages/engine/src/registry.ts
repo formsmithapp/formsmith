@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { v1BlockDefinitions } from '@formsmithapp/blocks'
+import { runtimeBlockDefinitions } from '@formsmithapp/blocks/runtime'
 import type { Block } from './types'
 
 /**
@@ -31,7 +31,7 @@ export function isEmptyValue(value: unknown): boolean {
 /** The 17 v1 block types from `@formsmithapp/blocks`, plus any overrides/extensions. */
 export function createDefaultRegistry(extra?: Iterable<BlockTypeDef>): Map<string, BlockTypeDef> {
   const registry = new Map<string, BlockTypeDef>()
-  for (const def of v1BlockDefinitions) registry.set(def.type, def)
+  for (const def of runtimeBlockDefinitions) registry.set(def.type, def)
   if (extra) for (const def of extra) registry.set(def.type, def)
   return registry
 }

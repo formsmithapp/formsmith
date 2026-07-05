@@ -4,6 +4,7 @@
 import { z } from 'zod'
 import { placeholderField } from './shared'
 import type { BlockDefinition } from './types'
+import { emailAnswer, phoneAnswer, websiteAnswer } from './validators'
 
 const contactProperties = z.strictObject({
   placeholder: placeholderField,
@@ -12,8 +13,6 @@ const contactProperties = z.strictObject({
 export type EmailProperties = z.infer<typeof contactProperties>
 export type PhoneProperties = z.infer<typeof contactProperties>
 export type WebsiteProperties = z.infer<typeof contactProperties>
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const email: BlockDefinition = {
   type: 'email',
@@ -24,10 +23,7 @@ export const email: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: contactProperties,
-  validate: (value) =>
-    typeof value === 'string' && EMAIL_RE.test(value)
-      ? []
-      : ['Please enter a valid email address.'],
+  validate: emailAnswer,
 }
 
 export const phone: BlockDefinition = {
@@ -39,13 +35,7 @@ export const phone: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: contactProperties,
-  validate: (value) => {
-    if (typeof value === 'string' && /^\+?[0-9\s().-]+$/.test(value)) {
-      const digits = value.replace(/\D/g, '')
-      if (digits.length >= 5 && digits.length <= 15) return []
-    }
-    return ['Please enter a valid phone number.']
-  },
+  validate: phoneAnswer,
 }
 
 export const website: BlockDefinition = {
@@ -57,15 +47,5 @@ export const website: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: contactProperties,
-  validate: (value) => {
-    if (typeof value === 'string') {
-      try {
-        const url = new URL(value)
-        if (url.protocol === 'http:' || url.protocol === 'https:') return []
-      } catch {
-        // falls through to the error below
-      }
-    }
-    return ['Please enter a valid URL (including http:// or https://).']
-  },
+  validate: websiteAnswer,
 }

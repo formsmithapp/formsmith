@@ -1,7 +1,7 @@
 {
   "name": "@formsmithapp/blocks",
   "version": "0.0.0",
-  "description": "Formsmith block-type registry — the 17 v1 block types with Zod property schemas and answer validation.",
+  "description": "Formsmith block-type registry \u2014 the 17 v1 block types with Zod property schemas and answer validation.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -15,6 +15,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
     }
   },
   "publishConfig": {

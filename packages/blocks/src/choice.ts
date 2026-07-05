@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import { choiceIds, choicesField, placeholderField } from './shared'
-import type { BlockDefinition, BlockLike } from './types'
+import { choicesField, placeholderField } from './shared'
+import type { BlockDefinition } from './types'
+import { legalAnswer, multipleChoiceAnswer, singleChoiceAnswer, yesNoAnswer } from './validators'
 
 const multipleChoiceProperties = z.strictObject({
   choices: choicesField,
@@ -21,28 +22,6 @@ export type MultipleChoiceProperties = z.infer<typeof multipleChoiceProperties>
 export type DropdownProperties = z.infer<typeof dropdownProperties>
 export type YesNoProperties = z.infer<typeof emptyProperties>
 export type LegalProperties = z.infer<typeof emptyProperties>
-
-function multipleChoiceAnswer(value: unknown, block: BlockLike): string[] {
-  const ids = choiceIds(block)
-  if (block.properties?.multiple === true) {
-    if (!Array.isArray(value)) return ['Please select from the available choices.']
-    const seen = new Set<string>()
-    for (const item of value) {
-      if (typeof item !== 'string' || !ids.has(item) || seen.has(item)) {
-        return ['Please select from the available choices.']
-      }
-      seen.add(item)
-    }
-    return []
-  }
-  return typeof value === 'string' && ids.has(value) ? [] : ['Please select a valid choice.']
-}
-
-function singleChoiceAnswer(value: unknown, block: BlockLike): string[] {
-  return typeof value === 'string' && choiceIds(block).has(value)
-    ? []
-    : ['Please select a valid choice.']
-}
 
 const defaultChoices = () => [
   { id: 'choice-1', label: 'Choice 1' },
@@ -82,7 +61,7 @@ export const yesNo: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: emptyProperties,
-  validate: (value) => (typeof value === 'boolean' ? [] : ['Please select yes or no.']),
+  validate: yesNoAnswer,
 }
 
 export const legal: BlockDefinition = {
@@ -94,9 +73,5 @@ export const legal: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: emptyProperties,
-  validate: (value, block) => {
-    if (typeof value !== 'boolean') return ['Please choose whether you accept.']
-    if (block.required && value !== true) return ['Please accept to continue.']
-    return []
-  },
+  validate: legalAnswer,
 }

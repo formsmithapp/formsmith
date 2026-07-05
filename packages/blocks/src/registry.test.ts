@@ -7,6 +7,7 @@ import {
   v1BlockDefinitions,
   validateBlockProperties,
 } from './registry'
+import { runtimeBlockDefinitions } from './runtime'
 
 const V1_TYPES = [
   'short_text',
@@ -221,5 +222,18 @@ describe('property schemas per type', () => {
     rejects('ai_followup', { goal: 'g', fallbackQuestion: 'f', maxFollowups: 1.5 })
     const parsed = validateBlockProperties('ai_followup', { goal: 'g', fallbackQuestion: 'f' })
     expect(parsed).toMatchObject({ ok: true, properties: { maxFollowups: 1 } })
+  })
+})
+
+describe('the runtime entry (hot-path subset)', () => {
+  it('agrees with the full definitions: same types, flags, and validator identity', () => {
+    expect(runtimeBlockDefinitions.map((d) => d.type)).toEqual(
+      v1BlockDefinitions.map((d) => d.type),
+    )
+    for (const [index, runtime] of runtimeBlockDefinitions.entries()) {
+      const full = v1BlockDefinitions[index]
+      expect(runtime.isAnswerable, runtime.type).toBe(full?.isAnswerable)
+      expect(runtime.validate, runtime.type).toBe(full?.validate) // same function object
+    }
   })
 })

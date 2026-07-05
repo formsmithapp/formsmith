@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import { integerInRange, labelField, numberProp } from './shared'
-import type { BlockDefinition, BlockLike } from './types'
+import { labelField } from './shared'
+import type { BlockDefinition } from './types'
+import { npsAnswer, opinionScaleAnswer } from './validators'
 
 const opinionScaleProperties = z
   .strictObject({
@@ -26,12 +27,6 @@ const npsProperties = z.strictObject({
 export type OpinionScaleProperties = z.infer<typeof opinionScaleProperties>
 export type NpsProperties = z.infer<typeof npsProperties>
 
-function opinionScaleAnswer(value: unknown, block: BlockLike): string[] {
-  const min = numberProp(block, 'min') ?? 1
-  const max = numberProp(block, 'max') ?? 5
-  return integerInRange(value, min, max)
-}
-
 export const opinionScale: BlockDefinition = {
   type: 'opinion_scale',
   category: 'rating',
@@ -53,5 +48,5 @@ export const nps: BlockDefinition = {
   isAnswerable: true,
   defaultProperties: {},
   propertySchema: npsProperties,
-  validate: (value) => integerInRange(value, 0, 10),
+  validate: npsAnswer,
 }

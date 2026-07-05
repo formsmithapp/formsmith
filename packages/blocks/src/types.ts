@@ -13,13 +13,12 @@ export type BlockCategory = 'text' | 'choice' | 'contact' | 'number' | 'rating' 
  * The minimal structural view of a block that answer validation needs.
  * Deliberately a supertype of the engine's `Block`, so these validators plug
  * into the engine registry without this package importing the engine
- * (which would create a dependency cycle).
+ * (which would create a dependency cycle). Defined in `validators.ts` (the
+ * Zod-free runtime side); re-exported here for the full API.
  */
-export interface BlockLike {
-  type: string
-  required?: boolean
-  properties?: Record<string, unknown>
-}
+export type { BlockLike } from './validators'
+
+import type { BlockLike } from './validators'
 
 /**
  * The block-type contract shared by the engine (answer validation,

@@ -44,6 +44,7 @@ export {
   v1BlockDefinitions,
   validateBlockProperties,
 } from './registry'
+export { type RuntimeBlockDefinition, runtimeBlockDefinitions } from './runtime'
 export {
   type StatementProperties,
   statement,

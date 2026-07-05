@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import { isoDateField, isRealDate, numberProp, placeholderField, stringProp } from './shared'
-import type { BlockDefinition, BlockLike } from './types'
+import { isoDateField, placeholderField } from './shared'
+import type { BlockDefinition } from './types'
+import { dateAnswer, numberAnswer } from './validators'
 
 const numberProperties = z
   .strictObject({
@@ -36,31 +37,6 @@ const dateProperties = z
 
 export type NumberProperties = z.infer<typeof numberProperties>
 export type DateProperties = z.infer<typeof dateProperties>
-
-function numberAnswer(value: unknown, block: BlockLike): string[] {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return ['Please enter a number.']
-  const min = numberProp(block, 'min')
-  const max = numberProp(block, 'max')
-  const step = numberProp(block, 'step')
-  if (min !== undefined && value < min) return [`Value must be at least ${min}.`]
-  if (max !== undefined && value > max) return [`Value must be at most ${max}.`]
-  if (step !== undefined && step > 0) {
-    const ratio = (value - (min ?? 0)) / step
-    if (Math.abs(ratio - Math.round(ratio)) > 1e-9) return [`Please use increments of ${step}.`]
-  }
-  return []
-}
-
-function dateAnswer(value: unknown, block: BlockLike): string[] {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !isRealDate(value)) {
-    return ['Please enter a valid date (YYYY-MM-DD).']
-  }
-  const min = stringProp(block, 'min')
-  const max = stringProp(block, 'max')
-  if (min !== undefined && value < min) return [`Please pick a date on or after ${min}.`]
-  if (max !== undefined && value > max) return [`Please pick a date on or before ${max}.`]
-  return []
-}
 
 export const numberBlock: BlockDefinition = {
   type: 'number',

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import { textAnswer } from './shared'
 import type { BlockDefinition } from './types'
+import { textAnswer } from './validators'
 
 /**
  * The AI Follow-up block's config (the `AIConfig` contract): what the

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import { MAX_TEXT_LENGTH, placeholderField, textAnswer } from './shared'
+import { placeholderField } from './shared'
 import type { BlockDefinition } from './types'
+import { MAX_TEXT_LENGTH, textAnswer } from './validators'
 
 const textProperties = z.strictObject({
   placeholder: placeholderField,
