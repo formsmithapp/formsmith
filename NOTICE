@@ -1,0 +1,19 @@
+Formsmith
+Copyright (C) 2026 Gnana Siva Sai V <gnana097@gmail.com>
+https://formsmith.app
+
+This distribution contains software under multiple licenses. LICENSING.md is
+the authoritative map:
+
+  - The core is licensed under the GNU Affero General Public License v3.0
+    (AGPL-3.0-only) — see LICENSE.
+  - The customer-side integration surface (embed SDK, framework wrappers,
+    API client) is licensed under the MIT License — see LICENSES/MIT.txt and
+    the LICENSE file inside each of those packages.
+  - Code under modules/ee/ is commercially licensed under the Formsmith
+    Enterprise License — see modules/ee/LICENSE.
+
+Additional term under section 7(e) of the AGPL-3.0: this License does not
+grant permission to use the trade name "Formsmith" or the Formsmith logo,
+except as required for reasonable and customary description of the origin of
+the software. See TRADEMARK-POLICY.md.

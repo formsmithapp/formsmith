@@ -1,0 +1,52 @@
+Formsmith Enterprise License (v1.0)
+
+Copyright (C) 2026 Gnana Siva Sai V <gnana097@gmail.com> ("Licensor")
+
+This license governs all files in this directory and its subdirectories, and
+any other file in the Formsmith repository that carries a Formsmith Enterprise
+License header (the "Enterprise Software"). The GNU Affero General Public
+License does not apply to the Enterprise Software.
+
+1. Production use requires a license. You may use the Enterprise Software in
+   production only if you (and any entity you represent) hold a valid Formsmith
+   Enterprise subscription or license key issued by Licensor, and only for the
+   duration, scope, and number of instances or seats of that subscription, and
+   subject to its terms.
+
+2. Evaluation and development. You may copy, modify, and run the Enterprise
+   Software without a subscription solely for local development, testing, and
+   evaluation purposes.
+
+3. Modifications and patches. Subject to Section 1, you may modify the
+   Enterprise Software and publish patches to it. All right, title, and
+   interest in and to the Enterprise Software, and in any such modifications
+   and patches, remain with Licensor, and modifications and patches may be
+   used, copied, distributed, or otherwise exploited only with a valid
+   Formsmith Enterprise subscription or license key.
+
+4. Restrictions. You may not:
+   (a) use the Enterprise Software in production without a valid subscription
+       or license key;
+   (b) remove, alter, or circumvent any license-key validation or feature
+       gating in the Enterprise Software;
+   (c) distribute the Enterprise Software, or any modification of it, as part
+       of any product or service that competes with Formsmith's commercial
+       offerings;
+   (d) remove or obscure any licensing, copyright, or other notices of
+       Licensor in the Enterprise Software.
+
+5. Termination. Any use of the Enterprise Software in violation of this
+   license automatically terminates your rights under this license for the
+   current and all other versions of the Enterprise Software.
+
+6. Trademarks. This license grants no rights to use Licensor's trade names,
+   trademarks, service marks, or logos (see TRADEMARK-POLICY.md at the
+   repository root).
+
+7. Disclaimer. THE ENTERPRISE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY
+   OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+   WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NONINFRINGEMENT. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+   OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE ENTERPRISE
+   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE ENTERPRISE SOFTWARE.
