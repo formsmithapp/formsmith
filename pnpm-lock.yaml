@@ -24,8 +24,33 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  packages/blocks:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@formsmithapp/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@22.20.0)(@vitest/browser@3.2.6)(yaml@2.9.0)
+
   packages/engine:
     dependencies:
+      '@formsmithapp/blocks':
+        specifier: workspace:*
+        version: link:../blocks
       '@formsmithapp/rules':
         specifier: workspace:*
         version: link:../rules
@@ -1347,6 +1372,9 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@babel/code-frame@7.29.7':
@@ -2383,3 +2411,5 @@ snapshots:
   ws@8.21.0: {}
 
   yaml@2.9.0: {}
+
+  zod@4.4.3: {}
