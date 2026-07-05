@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Formsmith pre-commit gate: format/lint staged files, then typecheck, test, and build.
+# (Turbo caches build/typecheck/test, so unchanged runs are near-instant.)
+# If this feels heavy, move `test` + `build` to a pre-push hook.
+
+pnpm exec lint-staged
+pnpm run typecheck
+pnpm run test
+pnpm run build

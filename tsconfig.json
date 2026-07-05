@@ -1,0 +1,7 @@
+{
+  "extends": "@formsmithapp/tsconfig/base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "files": []
+}
