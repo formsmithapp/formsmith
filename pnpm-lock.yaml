@@ -47,6 +47,9 @@ importers:
       '@formsmithapp/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@formsmithapp/templates':
+        specifier: workspace:*
+        version: link:../../packages/templates
       '@formsmithapp/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -226,6 +229,34 @@ importers:
       '@formsmithapp/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.6(@types/node@22.20.0)(@vitest/browser@3.2.6)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  packages/templates:
+    dependencies:
+      '@formsmithapp/engine':
+        specifier: workspace:*
+        version: link:../engine
+    devDependencies:
+      '@formsmithapp/blocks':
+        specifier: workspace:*
+        version: link:../blocks
+      '@formsmithapp/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@formsmithapp/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0

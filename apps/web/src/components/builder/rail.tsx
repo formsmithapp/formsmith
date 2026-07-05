@@ -20,42 +20,69 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { getBlockDefinition } from '@formsmithapp/blocks'
 import type { Block } from '@formsmithapp/engine'
-import { Copy, Eye, GripVertical, Plus, Sigma, Split, Trash2 } from 'lucide-react'
+import { Copy, Eye, EyeOff, GripVertical, Plus, Sigma, Split, Trash2 } from 'lucide-react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { BlockIconTile } from './block-icons'
 import { useBuilder, useBuilderState } from './store-context'
+import { useEditEngine } from './use-edit-engine'
 
 function RailRow({
   block,
   questionNumber,
   selected,
   glyphs,
+  hiddenNow,
 }: {
   block: Block
   questionNumber: number | null
   selected: boolean
   glyphs: { visibility: boolean; jumps: boolean; scoring: boolean }
+  /** Hidden under current rules from a fresh start (edit-engine evaluation). */
+  hiddenNow: boolean
 }) {
   const store = useBuilder()
   const pinned = block.type === 'welcome'
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isSorting,
+    index,
+    activeIndex,
+    overIndex,
+  } = useSortable({
     id: block.id,
     disabled: pinned,
   })
   const definition = getBlockDefinition(block.type)
   const ai = block.type === 'ai_followup'
+  // the design-spec 2px drop-line: drawn at the edge of the slot the dragged
+  // row would land in (below when moving down, above when moving up)
+  const dropLine = isSorting && !isDragging && index === overIndex
 
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? 'z-10 opacity-90' : undefined}
+      className={`relative ${isDragging ? 'z-10 opacity-90' : ''}`}
     >
+      {dropLine && (
+        <span
+          aria-hidden="true"
+          data-drop-line
+          className={`absolute inset-x-1 z-10 h-[2px] rounded-full bg-brand ${
+            activeIndex < index ? '-bottom-[2px]' : '-top-[2px]'
+          }`}
+        />
+      )}
       <div
         data-rail-row={block.ref}
         className={`group flex w-full items-center gap-2 rounded-[10px] border py-2 pr-2.5 pl-1 transition-colors ${
           selected ? 'border-brand/30 bg-brand-soft' : 'border-transparent hover:bg-surface-hover'
-        } ${isDragging ? 'bg-surface-2 shadow-md' : ''}`}
+        } ${isDragging ? 'bg-surface-2 shadow-md' : ''} ${hiddenNow ? 'opacity-55' : ''}`}
       >
         {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: dnd-kit's spread supplies role+tabindex at runtime */}
         <span
@@ -80,7 +107,12 @@ function RailRow({
             </span>
             <span className="flex items-center gap-1 font-mono text-[9.5px] tracking-[0.08em] text-fg-3 uppercase">
               {definition?.displayName ?? block.type}
-              {glyphs.visibility && <Eye size={9} aria-label="Has visibility rule" />}
+              {glyphs.visibility &&
+                (hiddenNow ? (
+                  <EyeOff size={9} aria-label="Hidden until its rule matches" />
+                ) : (
+                  <Eye size={9} aria-label="Has visibility rule" />
+                ))}
               {glyphs.jumps && <Split size={9} aria-label="Has jump logic" />}
               {glyphs.scoring && <Sigma size={9} aria-label="Has scoring" />}
             </span>
@@ -141,6 +173,11 @@ export function Rail() {
     }
   }
 
+  // live dimming: blocks whose visibility rule doesn't match from a fresh
+  // start (initial variables, no answers) — what a respondent would NOT see
+  const editEngine = useEditEngine(state.doc)
+  const visibleNow = new Set(editEngine?.getVisibleBlocks().map((b) => b.id) ?? [])
+
   let question = 0
   return (
     <aside className="flex min-h-0 flex-col border-r border-line bg-surface">
@@ -161,6 +198,11 @@ export function Rail() {
                   block={block}
                   questionNumber={answerable ? question : null}
                   selected={state.selectedId === block.id}
+                  hiddenNow={
+                    block.visibility !== undefined &&
+                    editEngine !== null &&
+                    !visibleNow.has(block.id)
+                  }
                   glyphs={{
                     visibility: block.visibility !== undefined,
                     jumps: logic.some(

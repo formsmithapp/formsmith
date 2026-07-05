@@ -6,8 +6,8 @@ import { createEngine, FormValidationError } from '@formsmithapp/engine'
 import { FormRuntime } from '@formsmithapp/renderer'
 import { X } from 'lucide-react'
 import { useCallback, useState } from 'react'
+import { useFormTheming } from '../use-theme'
 import { useBuilder } from './store-context'
-import { useFormTheming } from './use-theme'
 
 /**
  * Full-screen respondent preview — literally the runtime renderer on a

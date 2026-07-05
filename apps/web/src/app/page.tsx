@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 'use client'
 
+import { instantiateTemplate, TEMPLATES, type TemplateDefinition } from '@formsmithapp/templates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, FileText, Plus, Trash2 } from 'lucide-react'
+import { Copy, FileText, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { BrandMark } from '@/components/brand-mark'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -17,6 +18,14 @@ export default function FormsListPage() {
 
   const createForm = useMutation({
     mutationFn: () => getRepository().create(),
+    onSuccess: (stored) => {
+      invalidate()
+      router.push(`/forms/${stored.form.id}/create`)
+    },
+  })
+  const createFromTemplate = useMutation({
+    mutationFn: (template: TemplateDefinition) =>
+      getRepository().create(instantiateTemplate(template)),
     onSuccess: (stored) => {
       invalidate()
       router.push(`/forms/${stored.form.id}/create`)
@@ -53,6 +62,42 @@ export default function FormsListPage() {
           <Plus size={15} /> New form
         </button>
       </div>
+
+      <section className="mt-8">
+        <h2 className="eyebrow text-fg-3">Start from a template</h2>
+        <ul className="mt-3 grid grid-cols-3 gap-2.5 max-[640px]:grid-cols-2">
+          {TEMPLATES.map((template) => (
+            <li key={template.id}>
+              <button
+                type="button"
+                onClick={() => createFromTemplate.mutate(template)}
+                className={`group/tpl h-full w-full rounded-[12px] border bg-surface-2 px-3.5 py-3 text-left shadow-sm transition-colors ${
+                  template.featured === true
+                    ? 'border-brand/40 hover:border-brand'
+                    : 'border-line hover:border-brand/30'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ background: template.accent }}
+                  />
+                  <span className="min-w-0 truncate text-[13px] font-semibold">
+                    {template.name}
+                  </span>
+                  {template.featured === true && (
+                    <Sparkles size={11} className="shrink-0 text-brand" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="mt-1.5 block text-[11.5px] leading-snug text-fg-2">
+                  {template.description}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <ul className="mt-8 space-y-2.5">
         {(forms.data ?? []).map((summary) => (

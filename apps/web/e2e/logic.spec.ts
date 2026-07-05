@@ -123,9 +123,10 @@ test('visibility + hidden fields: authored in the UI, honored in preview', async
   await title.fill('Tell us more')
   const logicSection = page.locator('section', { hasText: 'Logic' })
   await logicSection.getByRole('button', { name: '+ Add condition' }).first().click()
-  // default condition: yes_no is Yes — exactly what we want; rail shows the eye glyph
+  // default condition: yes_no is Yes — with no answer yet the block is hidden
+  // from a fresh start, so the rail dims it with the eye-off glyph (M4-D6)
   await expect(
-    page.locator('[data-rail-row="short_text"] [aria-label="Has visibility rule"]'),
+    page.locator('[data-rail-row="short_text"] [aria-label="Hidden until its rule matches"]'),
   ).toBeVisible()
 
   // hidden field via the settings sheet, piped into the welcome title

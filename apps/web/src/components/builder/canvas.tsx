@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 'use client'
 
-import { type Block, createEngine } from '@formsmithapp/engine'
+import type { Block } from '@formsmithapp/engine'
 import { Braces, CornerDownRight, Plus, Sparkles, X } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
+import { useFormTheming } from '../use-theme'
 import { InlineEdit } from './inline-edit'
 import { conditionFields } from './logic-ui'
 import { useBuilder, useBuilderState } from './store-context'
-import { useFormTheming } from './use-theme'
+import { useEditEngine } from './use-edit-engine'
 
 interface Choice {
   id: string
@@ -244,15 +245,7 @@ export function Canvas() {
   const isChoiceEditable = block?.type === 'multiple_choice' || block?.type === 'dropdown'
 
   // last-good edit engine: resolves {{tokens}} with initial variables for the hint
-  const lastEngine = useRef<ReturnType<typeof createEngine> | null>(null)
-  const editEngine = useMemo(() => {
-    try {
-      lastEngine.current = createEngine(state.doc, { mode: 'edit' })
-    } catch {
-      // keep the previous engine while the doc is mid-edit invalid
-    }
-    return lastEngine.current
-  }, [state.doc])
+  const editEngine = useEditEngine(state.doc)
   const hasTokens = block !== null && /\{\{/.test(block.title)
   const pipedHint =
     hasTokens && block !== null && editEngine !== null
