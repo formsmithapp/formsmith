@@ -6,6 +6,16 @@ import { forms, responses } from './schema'
 
 export { createDb, type Database } from './client'
 export {
+  type ApiKeyRow,
+  type ApiKeysDbRepository,
+  apiKeysRepository,
+  type DeliveryRow,
+  type UsageBucket,
+  type WebhookRow,
+  type WebhooksDbRepository,
+  webhooksRepository,
+} from './repositories/connect'
+export {
   type FormRow,
   type FormsDbRepository,
   formsRepository,

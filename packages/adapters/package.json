@@ -1,7 +1,7 @@
 {
-  "name": "@formsmithapp/api",
+  "name": "@formsmithapp/adapters",
   "version": "0.0.0",
-  "description": "Formsmith data-plane API (Hono) — mountable into the unified web build today, standalone-deployable (Node/Workers) tomorrow.",
+  "description": "Formsmith infrastructure adapters — queue (pg-boss) and mail (SMTP) behind portable interfaces; more arrive with uploads/AI.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -23,28 +23,18 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@formsmithapp/adapters": "workspace:*",
-    "@formsmithapp/blocks": "workspace:*",
-    "@formsmithapp/db": "workspace:*",
-    "@formsmithapp/engine": "workspace:*",
-    "@formsmithapp/schemas": "workspace:*",
-    "@hono/node-server": "^2.0.8",
-    "@hono/zod-openapi": "^1.4.0",
-    "@hono/zod-validator": "^0.8.0",
-    "hono": "^4.12.27",
-    "zod": "^4.4.3"
+    "nodemailer": "^9.0.3",
+    "pg-boss": "^12.25.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.4",
     "@formsmithapp/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
-    "drizzle-orm": "^0.45.2",
+    "@types/nodemailer": "^8.0.1",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"

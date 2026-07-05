@@ -59,6 +59,29 @@ export const importInput = z.strictObject({
   forms: z.array(importFormEntry).min(1).max(200),
 })
 
+/* ---------- Connect (S3) ---------- */
+
+export const createApiKeyInput = z.strictObject({
+  name: z.string().min(1).max(100),
+})
+
+/** https required except localhost — self-host operators test locally. */
+export const createWebhookInput = z.strictObject({
+  url: z
+    .url()
+    .max(2_000)
+    .refine((value) => {
+      try {
+        const url = new URL(value)
+        if (url.protocol === 'https:') return true
+        if (url.protocol !== 'http:') return false
+        return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+      } catch {
+        return false
+      }
+    }, 'must be an https URL (http is allowed for localhost only)'),
+})
+
 export type CreateFormInput = z.infer<typeof createFormInput>
 export type UpdateFormInput = z.infer<typeof updateFormInput>
 export type SubmissionInput = z.infer<typeof submissionInput>
@@ -66,3 +89,5 @@ export type ResponseDto = z.infer<typeof responseDto>
 export type PaginationInput = z.infer<typeof paginationInput>
 export type ImportFormEntry = z.infer<typeof importFormEntry>
 export type ImportInput = z.infer<typeof importInput>
+export type CreateApiKeyInput = z.infer<typeof createApiKeyInput>
+export type CreateWebhookInput = z.infer<typeof createWebhookInput>

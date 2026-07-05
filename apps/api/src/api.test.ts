@@ -3,6 +3,7 @@
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
+import { InMemoryQueue } from '@formsmithapp/adapters'
 import { createWorkspaceWithOwner, type Database, schema } from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
 import { drizzle } from 'drizzle-orm/pglite'
@@ -55,6 +56,7 @@ const quizDoc = (): FormDefinition => ({
 let db: Database
 let currentUser: string | null
 let app: ReturnType<typeof createApi>
+let queue: InMemoryQueue
 
 const json = (body: unknown) => ({
   method: 'POST',
@@ -78,9 +80,11 @@ beforeEach(async () => {
   await createWorkspaceWithOwner(db, 'alice', "Alice's workspace")
   await createWorkspaceWithOwner(db, 'mallory', "Mallory's workspace")
   currentUser = 'alice'
+  queue = new InMemoryQueue()
   app = createApi({
     db,
     getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+    queue,
   })
 })
 
@@ -209,5 +213,158 @@ describe('import', () => {
     // the imported snapshot serves publicly — old links keep working post-migration
     currentUser = null
     expect((await app.request(`/api/v1/f/${newId}`)).status).toBe(200)
+  })
+})
+
+describe('S3: api keys + bearer auth', () => {
+  it('mints once-revealed keys; bearer auth works; usage buckets record; revoke → 401', async () => {
+    const created = await app.request('/api/v1/api-keys', json({ name: 'CI key' }))
+    expect(created.status).toBe(201)
+    const { key, secret } = (await created.json()) as {
+      key: { id: string; prefix: string }
+      secret: string
+    }
+    expect(secret).toMatch(/^fsk_/)
+    expect(key.prefix).toBe(secret.slice(0, 12))
+
+    // list never contains the secret
+    const list = (await (await app.request('/api/v1/api-keys')).json()) as {
+      keys: { id: string; prefix: string }[]
+    }
+    expect(JSON.stringify(list)).not.toContain(secret)
+
+    // bearer auth reaches a workspace route WITHOUT a session
+    currentUser = null
+    const bearer = { headers: { authorization: `Bearer ${secret}` } }
+    const viaKey = await app.request('/api/v1/forms', bearer)
+    expect(viaKey.status).toBe(200)
+    await app.request('/api/v1/forms', bearer) // second request, same day bucket
+
+    // usage recorded into today's bucket (fire-and-forget → settle first)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    currentUser = 'alice'
+    const withUsage = (await (await app.request('/api/v1/api-keys')).json()) as {
+      keys: { id: string; total: number; usage: { requests: number }[] }[]
+    }
+    expect(withUsage.keys[0]?.total).toBe(2)
+
+    // key-management surface is session-only — a key cannot reach it
+    currentUser = null
+    expect((await app.request('/api/v1/api-keys', bearer)).status).toBe(401)
+
+    // revoke kills the key
+    currentUser = 'alice'
+    const revoked = await app.request(`/api/v1/api-keys/${key.id}`, { method: 'DELETE' })
+    expect(revoked.status).toBe(200)
+    currentUser = null
+    expect((await app.request('/api/v1/forms', bearer)).status).toBe(401)
+  })
+
+  it('garbage bearer tokens are rejected', async () => {
+    currentUser = null
+    const res = await app.request('/api/v1/forms', {
+      headers: { authorization: 'Bearer fsk_definitely-not-a-key' },
+    })
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('S3: webhooks', () => {
+  it('CRUD is workspace-scoped; secret revealed once; list carries state + history', async () => {
+    const formId = await createForm()
+    const created = await app.request(
+      `/api/v1/forms/${formId}/webhooks`,
+      json({ url: 'https://example.test/hook' }),
+    )
+    expect(created.status).toBe(201)
+    const { webhook, secret } = (await created.json()) as {
+      webhook: { id: string }
+      secret: string
+    }
+    expect(secret).toMatch(/^whsec_/)
+
+    const list = (await (await app.request(`/api/v1/forms/${formId}/webhooks`)).json()) as {
+      webhooks: { id: string; deliveries: unknown[] }[]
+    }
+    expect(list.webhooks).toHaveLength(1)
+    expect(JSON.stringify(list)).not.toContain(secret) // never re-revealed
+
+    currentUser = 'mallory'
+    expect((await app.request(`/api/v1/forms/${formId}/webhooks`)).status).toBe(404)
+    expect(
+      (
+        await app.request(
+          `/api/v1/forms/${formId}/webhooks`,
+          json({ url: 'https://evil.test/hook' }),
+        )
+      ).status,
+    ).toBe(404)
+    currentUser = 'alice'
+    expect(
+      (await app.request(`/api/v1/forms/${formId}/webhooks/${webhook.id}`, { method: 'DELETE' }))
+        .status,
+    ).toBe(200)
+  })
+
+  it('rejects non-https URLs (localhost excepted)', async () => {
+    const formId = await createForm()
+    const bad = await app.request(
+      `/api/v1/forms/${formId}/webhooks`,
+      json({ url: 'http://internal.corp/hook' }),
+    )
+    expect(bad.status).toBe(400)
+    const local = await app.request(
+      `/api/v1/forms/${formId}/webhooks`,
+      json({ url: 'http://localhost:9999/hook' }),
+    )
+    expect(local.status).toBe(201)
+  })
+
+  it('accepted submissions enqueue one delivery per active webhook (+ notify when toggled)', async () => {
+    const formId = await createForm()
+    await app.request(`/api/v1/forms/${formId}/webhooks`, json({ url: 'https://a.test/1' }))
+    await app.request(`/api/v1/forms/${formId}/webhooks`, json({ url: 'https://b.test/2' }))
+    await app.request(`/api/v1/forms/${formId}/publish`, { method: 'POST' })
+
+    currentUser = null
+    await app.request(`/api/v1/f/${formId}/responses`, json({ answers: { plan: 'pro' } }))
+    const deliveries = queue.sent.filter((job) => job.name === 'webhook.deliver')
+    expect(deliveries).toHaveLength(2)
+    expect(queue.sent.filter((job) => job.name === 'email.notify')).toHaveLength(0) // not toggled
+
+    // rejected submissions enqueue NOTHING
+    await app.request(`/api/v1/f/${formId}/responses`, json({ answers: {} }))
+    expect(queue.sent.filter((job) => job.name === 'webhook.deliver')).toHaveLength(2)
+
+    // toggle notifications on (settings live on the draft doc)
+    currentUser = 'alice'
+    const { form } = (await (await app.request(`/api/v1/forms/${formId}`)).json()) as {
+      form: FormDefinition
+    }
+    await app.request(`/api/v1/forms/${formId}`, {
+      ...json({ doc: { ...form, settings: { ...form.settings, notifyOnSubmit: true } } }),
+      method: 'PUT',
+    })
+    currentUser = null
+    await app.request(`/api/v1/f/${formId}/responses`, json({ answers: { plan: 'starter' } }))
+    expect(queue.sent.filter((job) => job.name === 'email.notify')).toHaveLength(1)
+  })
+})
+
+describe('S3: meta + openapi', () => {
+  it('meta reports mail capability; openapi.json is public and lists the routes', async () => {
+    const meta = (await (await app.request('/api/v1/meta')).json()) as {
+      mailConfigured: boolean
+    }
+    expect(meta.mailConfigured).toBe(false) // no mail adapter injected
+
+    currentUser = null
+    const spec = await app.request('/api/v1/openapi.json')
+    expect(spec.status).toBe(200)
+    const body = (await spec.json()) as { openapi: string; paths: Record<string, unknown> }
+    expect(body.openapi).toBe('3.1.0')
+    expect(Object.keys(body.paths)).toEqual(
+      expect.arrayContaining(['/api/v1/f/{id}', '/api/v1/forms', '/api/v1/api-keys']),
+    )
   })
 })

@@ -5,6 +5,7 @@ import { createApi } from '@formsmithapp/api'
 import { handle } from 'hono/vercel'
 import { getAuth } from '@/lib/auth'
 import { getDb } from '@/lib/db'
+import { getMail, getQueue } from '@/lib/workers'
 
 // The v1 unified build: the SAME Hono app that can deploy standalone is
 // mounted here at /api/v1. Lazy so `next build` needs no environment.
@@ -18,6 +19,8 @@ function getHandler() {
         const session = await getAuth().api.getSession({ headers })
         return session === null ? null : { userId: session.user.id }
       },
+      queue: getQueue(),
+      mail: getMail(),
     })
     handler = handle(api)
   }

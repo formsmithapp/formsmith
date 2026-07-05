@@ -4,7 +4,8 @@
 
 import { instantiateTemplate, TEMPLATES, type TemplateDefinition } from '@formsmithapp/templates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, FileText, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Copy, FileText, Plus, Settings, Sparkles, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { BrandMark } from '@/components/brand-mark'
 import { ImportBanner } from '@/components/import-banner'
@@ -48,6 +49,13 @@ export default function FormsListPage() {
         <BrandMark />
         <span className="flex items-center gap-3">
           <UserMenu />
+          <Link
+            href="/settings/api-keys"
+            aria-label="Workspace settings"
+            className="grid size-7 place-items-center rounded-md text-fg-3 transition-colors hover:bg-surface-hover hover:text-fg"
+          >
+            <Settings size={14} />
+          </Link>
           <ThemeToggle />
         </span>
       </header>

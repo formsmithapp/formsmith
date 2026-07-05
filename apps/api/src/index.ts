@@ -1,53 +1,166 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { MailAdapter, QueueAdapter } from '@formsmithapp/adapters'
 import type { Database } from '@formsmithapp/db'
-import { formsRepository, responsesRepository, schema, workspaceForUser } from '@formsmithapp/db'
+import {
+  apiKeysRepository,
+  formsRepository,
+  responsesRepository,
+  schema,
+  webhooksRepository,
+  workspaceForUser,
+} from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
 import {
+  createApiKeyInput,
   createFormInput,
+  createWebhookInput,
   importInput,
   submissionInput,
   updateFormInput,
 } from '@formsmithapp/schemas'
-import { zValidator } from '@hono/zod-validator'
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, eq } from 'drizzle-orm'
-import { Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
+import { generateApiKey, generateWebhookSecret, hashApiKey } from './keys'
 import { evaluate, isUuid, validateFormDocument } from './service'
+import { WEBHOOK_RETRY } from './workers'
 
 /**
- * The Formsmith data plane — a MOUNTABLE Hono app. The v1 unified build
- * mounts it inside Next at `/api/v1`; the same app deploys standalone
- * (Node today via src/server.ts, Workers in the hosted phase) with zero
- * rewrite. Auth stays with the host: the app receives `getSession`.
+ * The Formsmith data plane — a MOUNTABLE OpenAPIHono app: the v1 unified
+ * build mounts it inside Next at `/api/v1`; the same app deploys standalone.
+ * Since S3 the SAME routes are the public REST API (bearer API keys) and the
+ * same Zod that validates them emits /api/v1/openapi.json.
  */
 
 export interface ApiDeps {
   db: Database
   /** Resolves the signed-in user from request headers (Better Auth in v1). */
   getSession: (headers: Headers) => Promise<{ userId: string } | null>
+  /** Background jobs (webhooks, notifications). Absent → integrations 503. */
+  queue?: QueueAdapter
+  mail?: MailAdapter
 }
 
 interface Env {
-  Variables: { workspaceId: string }
+  Variables: { workspaceId: string; authVia: 'session' | 'key' }
 }
+
+/* ---------- response DTOs (they also document the spec) ---------- */
+
+const errorDto = z.object({ error: z.string(), issues: z.array(z.unknown()).optional() })
+const formDoc = z.record(z.string(), z.unknown()).openapi({ description: 'Form document' })
+const formSummaryDto = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(['draft', 'published']),
+  publishedVersion: z.number().optional(),
+  blockCount: z.number(),
+  updatedAt: z.string(),
+})
+const storedFormDto = z.object({
+  form: formDoc,
+  status: z.enum(['draft', 'published']),
+  publishedVersion: z.number().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+const responseRowDto = z.object({
+  id: z.string(),
+  formId: z.string(),
+  formVersion: z.number(),
+  submittedAt: z.string(),
+  answers: z.record(z.string(), z.unknown()),
+  variables: z.record(z.string(), z.unknown()),
+  hidden: z.record(z.string(), z.string()),
+  ending: z.string().nullable(),
+})
+const usageBucketDto = z.object({ day: z.string(), requests: z.number() })
+const apiKeyDto = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+  usage: z.array(usageBucketDto),
+  total: z.number(),
+})
+const deliveryDto = z.object({
+  id: z.string(),
+  event: z.string(),
+  attempt: z.number(),
+  status: z.number().nullable(),
+  error: z.string().nullable(),
+  durationMs: z.number(),
+  createdAt: z.string(),
+})
+const webhookDto = z.object({
+  id: z.string(),
+  url: z.string(),
+  active: z.boolean(),
+  lastStatus: z.number().nullable(),
+  lastError: z.string().nullable(),
+  lastAttemptAt: z.string().nullable(),
+  createdAt: z.string(),
+  deliveries: z.array(deliveryDto),
+})
+
+const jsonBody = <T extends z.ZodType>(schema: T) => ({
+  content: { 'application/json': { schema } },
+})
+const jsonResponse = <T extends z.ZodType>(schema: T, description: string) => ({
+  content: { 'application/json': { schema } },
+  description,
+})
+const idParam = z.object({ id: z.string().openapi({ format: 'uuid' }) })
+
+const NOT_FOUND = { error: 'not found' }
 
 export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   const forms = formsRepository(deps.db)
   const responses = responsesRepository(deps.db)
+  const apiKeys = apiKeysRepository(deps.db)
+  const webhooks = webhooksRepository(deps.db)
 
-  /** Session + workspace gate for the dashboard surface. */
+  const todayUtc = () => new Date().toISOString().slice(0, 10)
+
+  /** Session first, then `Authorization: Bearer fsk_…` — the public REST API. */
   const requireWorkspace = createMiddleware<Env>(async (c, next) => {
+    const session = await deps.getSession(c.req.raw.headers)
+    if (session !== null) {
+      const workspace = await workspaceForUser(deps.db, session.userId)
+      if (workspace === null) return c.json({ error: 'no workspace' }, 403)
+      c.set('workspaceId', workspace.id)
+      c.set('authVia', 'session')
+      return next()
+    }
+    const header = c.req.header('authorization')
+    if (header?.startsWith('Bearer fsk_') === true) {
+      const key = await apiKeys.findByHash(hashApiKey(header.slice('Bearer '.length)))
+      if (key !== null) {
+        c.set('workspaceId', key.workspaceId)
+        c.set('authVia', 'key')
+        // metrics/telemetry must never fail a request
+        void apiKeys.touchLastUsed(key.id).catch(() => {})
+        void apiKeys.recordUsage(key.id, todayUtc()).catch(() => {})
+        return next()
+      }
+    }
+    return c.json({ error: 'unauthorized' }, 401)
+  })
+
+  /** Keys must not mint keys: the key-management surface is session-only. */
+  const requireSession = createMiddleware<Env>(async (c, next) => {
     const session = await deps.getSession(c.req.raw.headers)
     if (session === null) return c.json({ error: 'unauthorized' }, 401)
     const workspace = await workspaceForUser(deps.db, session.userId)
     if (workspace === null) return c.json({ error: 'no workspace' }, 403)
     c.set('workspaceId', workspace.id)
+    c.set('authVia', 'session')
     await next()
   })
 
-  /** Latest published snapshot, or a pinned version — public submit path. */
   async function snapshotForSubmit(
     formId: string,
     version: number | undefined,
@@ -70,14 +183,14 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   const summarize = (row: {
     id: string
     title: string
-    status: string
+    status: 'draft' | 'published'
     publishedVersion: number | null
     doc: FormDefinition
     updatedAt: Date
   }) => ({
     id: row.id,
     title: row.title,
-    status: row.status as 'draft' | 'published',
+    status: row.status,
     publishedVersion: row.publishedVersion ?? undefined,
     blockCount: row.doc.blocks.length,
     updatedAt: row.updatedAt.toISOString(),
@@ -85,39 +198,81 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   const stored = (row: {
     doc: FormDefinition
-    status: string
+    status: 'draft' | 'published'
     publishedVersion: number | null
     createdAt: Date
     updatedAt: Date
   }) => ({
-    form: row.doc,
-    status: row.status as 'draft' | 'published',
+    form: row.doc as unknown as Record<string, unknown>,
+    status: row.status,
     publishedVersion: row.publishedVersion ?? undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   })
 
-  const app = new Hono<Env>()
-    .basePath(basePath)
+  const responseJson = (row: {
+    id: string
+    formId: string
+    formVersion: number
+    submittedAt: Date
+    answers: Record<string, unknown>
+    variables: Record<string, unknown>
+    hidden: Record<string, string>
+    ending: string | null
+  }) => ({ ...row, submittedAt: row.submittedAt.toISOString() })
 
-    /* ---------- public: serve & submit ---------- */
+  const app = new OpenAPIHono<Env>().basePath(basePath)
 
-    .get('/f/:id', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  // NOTE: in Hono, `/x/*` also matches `/x` — register each surface ONCE,
+  // or the middleware (and usage recording) runs twice per request.
+  app.use('/forms/*', requireWorkspace)
+  app.use('/import', requireWorkspace)
+  app.use('/meta', requireWorkspace)
+  app.use('/api-keys/*', requireSession)
+
+  /* ---------- public: serve & submit ---------- */
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/f/{id}',
+      tags: ['public'],
+      summary: 'Serve the latest published form snapshot',
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ form: formDoc }), 'The published form document'),
+        404: jsonResponse(errorDto, 'Unknown or unpublished form'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const doc = await forms.getPublicSnapshot(id)
-      if (doc === null) return c.json({ error: 'not found' }, 404)
-      // immutable per version — safe to get more aggressive at the edge later
-      c.header('Cache-Control', 'public, max-age=60')
-      return c.json({ form: doc })
-    })
+      if (doc === null) return c.json(NOT_FOUND, 404)
+      c.header('Cache-Control', 'public, max-age=60') // immutable per version
+      return c.json({ form: doc as unknown as Record<string, unknown> }, 200)
+    },
+  )
 
-    .post('/f/:id/responses', zValidator('json', submissionInput), async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/f/{id}/responses',
+      tags: ['public'],
+      summary: 'Submit a response (re-evaluated server-side)',
+      request: { params: idParam, body: jsonBody(submissionInput) },
+      responses: {
+        201: jsonResponse(responseRowDto, 'The stored response (variables recomputed)'),
+        404: jsonResponse(errorDto, 'Unknown or unpublished form'),
+        422: jsonResponse(errorDto, 'Rejected by server-side re-evaluation'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const payload = c.req.valid('json')
       const snapshot = await snapshotForSubmit(id, payload.formVersion)
-      if (snapshot === null) return c.json({ error: 'not found' }, 404)
+      if (snapshot === null) return c.json(NOT_FOUND, 404)
 
       const outcome = evaluate(snapshot.doc, payload)
       if (!outcome.ok) return c.json({ error: 'rejected', issues: outcome.issues }, 422)
@@ -130,21 +285,66 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         hidden: payload.hiddenFields ?? {},
         ending: outcome.ending,
       })
-      return c.json({ ...row, submittedAt: row.submittedAt.toISOString() }, 201)
-    })
 
-    /* ---------- dashboard: session + workspace scoped ---------- */
+      // integrations are queued post-commit and must never fail the submission
+      if (deps.queue !== undefined) {
+        try {
+          const hooks = await webhooks.listActiveByForm(id)
+          for (const hook of hooks) {
+            await deps.queue.send(
+              'webhook.deliver',
+              { webhookId: hook.id, formId: id, responseId: row.id, event: 'response.created' },
+              WEBHOOK_RETRY,
+            )
+          }
+          const [formRow] = await deps.db
+            .select({ doc: schema.forms.doc })
+            .from(schema.forms)
+            .where(eq(schema.forms.id, id))
+            .limit(1)
+          const settings = formRow?.doc.settings as { notifyOnSubmit?: boolean } | undefined
+          if (settings?.notifyOnSubmit === true) {
+            await deps.queue.send('email.notify', { formId: id, responseId: row.id })
+          }
+        } catch (error) {
+          console.error('[submit] enqueue failed', error)
+        }
+      }
+      return c.json(responseJson(row), 201)
+    },
+  )
 
-    .use('/forms/*', requireWorkspace)
-    .use('/forms', requireWorkspace)
-    .use('/import', requireWorkspace)
+  /* ---------- dashboard + public REST: forms ---------- */
 
-    .get('/forms', async (c) => {
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms',
+      tags: ['forms'],
+      summary: 'List forms in the workspace',
+      security: [{ bearerAuth: [] }],
+      responses: { 200: jsonResponse(z.object({ forms: z.array(formSummaryDto) }), 'Summaries') },
+    }),
+    async (c) => {
       const rows = await forms.list(c.get('workspaceId'))
-      return c.json({ forms: rows.map(summarize) })
-    })
+      return c.json({ forms: rows.map(summarize) }, 200)
+    },
+  )
 
-    .post('/forms', zValidator('json', createFormInput), async (c) => {
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms',
+      tags: ['forms'],
+      summary: 'Create a form from a document',
+      security: [{ bearerAuth: [] }],
+      request: { body: jsonBody(createFormInput) },
+      responses: {
+        201: jsonResponse(storedFormDto, 'The stored form'),
+        400: jsonResponse(errorDto, 'Missing document'),
+      },
+    }),
+    async (c) => {
       const body = c.req.valid('json')
       if (body.doc === undefined) return c.json({ error: 'doc is required' }, 400)
       const row = await forms.create(
@@ -153,93 +353,451 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         body.title,
       )
       return c.json(stored(row), 201)
-    })
+    },
+  )
 
-    .get('/forms/:id', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}',
+      tags: ['forms'],
+      summary: 'Get a form (draft document)',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(storedFormDto, 'The stored form'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const row = await forms.get(c.get('workspaceId'), id)
-      return row === null ? c.json({ error: 'not found' }, 404) : c.json(stored(row))
-    })
+      return row === null ? c.json(NOT_FOUND, 404) : c.json(stored(row), 200)
+    },
+  )
 
-    .put('/forms/:id', zValidator('json', updateFormInput), async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/forms/{id}',
+      tags: ['forms'],
+      summary: 'Save the draft document',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam, body: jsonBody(updateFormInput) },
+      responses: {
+        200: jsonResponse(z.object({ ok: z.boolean() }), 'Saved'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const body = c.req.valid('json')
       const saved = await forms.save(
         c.get('workspaceId'),
         id,
         body.doc as unknown as FormDefinition,
       )
-      return saved ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404)
-    })
+      return saved ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
+    },
+  )
 
-    .delete('/forms/:id', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/forms/{id}',
+      tags: ['forms'],
+      summary: 'Delete a form (versions and responses cascade)',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ ok: z.boolean() }), 'Deleted'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const removed = await forms.remove(c.get('workspaceId'), id)
-      return removed ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404)
-    })
+      return removed ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
+    },
+  )
 
-    .post('/forms/:id/publish', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms/{id}/publish',
+      tags: ['forms'],
+      summary: 'Validate and publish (immutable snapshot)',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ version: z.number() }), 'Published version'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+        422: jsonResponse(errorDto, 'The document failed validation'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const row = await forms.get(c.get('workspaceId'), id)
-      if (row === null) return c.json({ error: 'not found' }, 404)
+      if (row === null) return c.json(NOT_FOUND, 404)
       const issues = validateFormDocument(row.doc)
       if (issues.length > 0) return c.json({ error: 'invalid', issues }, 422)
       const result = await forms.publish(c.get('workspaceId'), id)
-      if (result === null) return c.json({ error: 'not found' }, 404)
-      return c.json(result)
-    })
+      return result === null ? c.json(NOT_FOUND, 404) : c.json(result, 200)
+    },
+  )
 
-    .post('/forms/:id/duplicate', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms/{id}/duplicate',
+      tags: ['forms'],
+      summary: 'Duplicate a form as a fresh draft',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        201: jsonResponse(storedFormDto, 'The copy'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const row = await forms.duplicate(c.get('workspaceId'), id)
-      return row === null ? c.json({ error: 'not found' }, 404) : c.json(stored(row), 201)
-    })
+      return row === null ? c.json(NOT_FOUND, 404) : c.json(stored(row), 201)
+    },
+  )
 
-    .get('/forms/:id/versions/:version', async (c) => {
-      const id = c.req.param('id')
-      const version = Number(c.req.param('version'))
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}/versions/{version}',
+      tags: ['forms'],
+      summary: 'Get an immutable published snapshot',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam.extend({ version: z.string() }) },
+      responses: {
+        200: jsonResponse(z.object({ form: formDoc }), 'The pinned snapshot'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id, version: rawVersion } = c.req.valid('param')
+      const version = Number(rawVersion)
       if (!isUuid(id) || !Number.isInteger(version) || version < 1) {
-        return c.json({ error: 'not found' }, 404)
+        return c.json(NOT_FOUND, 404)
       }
       const doc = await forms.getSnapshot(c.get('workspaceId'), id, version)
-      return doc === null ? c.json({ error: 'not found' }, 404) : c.json({ form: doc })
-    })
+      return doc === null
+        ? c.json(NOT_FOUND, 404)
+        : c.json({ form: doc as unknown as Record<string, unknown> }, 200)
+    },
+  )
 
-    .get('/forms/:id/responses', async (c) => {
-      const id = c.req.param('id')
-      if (!isUuid(id)) return c.json({ error: 'not found' }, 404)
+  /* ---------- responses ---------- */
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}/responses',
+      tags: ['responses'],
+      summary: 'List responses (newest first)',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ responses: z.array(responseRowDto) }), 'Responses'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const rows = await responses.list(c.get('workspaceId'), id)
-      return c.json({
-        responses: rows.map((row) => ({ ...row, submittedAt: row.submittedAt.toISOString() })),
-      })
-    })
+      return c.json({ responses: rows.map(responseJson) }, 200)
+    },
+  )
 
-    .get('/forms/:id/responses/:responseId', async (c) => {
-      const id = c.req.param('id')
-      const responseId = c.req.param('responseId')
-      if (!isUuid(id) || !isUuid(responseId)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}/responses/{responseId}',
+      tags: ['responses'],
+      summary: 'Get one response',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam.extend({ responseId: z.string() }) },
+      responses: {
+        200: jsonResponse(responseRowDto, 'The response'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id, responseId } = c.req.valid('param')
+      if (!isUuid(id) || !isUuid(responseId)) return c.json(NOT_FOUND, 404)
       const row = await responses.get(c.get('workspaceId'), id, responseId)
-      return row === null
-        ? c.json({ error: 'not found' }, 404)
-        : c.json({ ...row, submittedAt: row.submittedAt.toISOString() })
-    })
+      return row === null ? c.json(NOT_FOUND, 404) : c.json(responseJson(row), 200)
+    },
+  )
 
-    .delete('/forms/:id/responses/:responseId', async (c) => {
-      const id = c.req.param('id')
-      const responseId = c.req.param('responseId')
-      if (!isUuid(id) || !isUuid(responseId)) return c.json({ error: 'not found' }, 404)
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/forms/{id}/responses/{responseId}',
+      tags: ['responses'],
+      summary: 'Delete one response',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam.extend({ responseId: z.string() }) },
+      responses: {
+        200: jsonResponse(z.object({ ok: z.boolean() }), 'Deleted'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id, responseId } = c.req.valid('param')
+      if (!isUuid(id) || !isUuid(responseId)) return c.json(NOT_FOUND, 404)
       const removed = await responses.remove(c.get('workspaceId'), id, responseId)
-      return removed ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404)
-    })
+      return removed ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
+    },
+  )
 
-    /* ---------- local-first migration ---------- */
+  /* ---------- api keys (session-only) ---------- */
 
-    .post('/import', zValidator('json', importInput), async (c) => {
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/api-keys',
+      tags: ['api-keys'],
+      summary: 'List active API keys with 30-day usage',
+      responses: { 200: jsonResponse(z.object({ keys: z.array(apiKeyDto) }), 'Active keys') },
+    }),
+    async (c) => {
+      const workspaceId = c.get('workspaceId')
+      const rows = await apiKeys.list(workspaceId)
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+      const keys = await Promise.all(
+        rows.map(async (row) => {
+          const usage = await apiKeys.usage(workspaceId, row.id, since)
+          return {
+            id: row.id,
+            name: row.name,
+            prefix: row.prefix,
+            createdAt: row.createdAt.toISOString(),
+            lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+            usage,
+            total: usage.reduce((sum, bucket) => sum + bucket.requests, 0),
+          }
+        }),
+      )
+      return c.json({ keys }, 200)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/api-keys',
+      tags: ['api-keys'],
+      summary: 'Create an API key — the secret is returned ONCE',
+      request: { body: jsonBody(createApiKeyInput) },
+      responses: {
+        201: jsonResponse(
+          z.object({
+            key: z.object({ id: z.string(), name: z.string(), prefix: z.string() }),
+            secret: z.string(),
+          }),
+          'The key — copy the secret now, it is never shown again',
+        ),
+      },
+    }),
+    async (c) => {
+      const { name } = c.req.valid('json')
+      const material = generateApiKey()
+      const row = await apiKeys.create(c.get('workspaceId'), name, material)
+      return c.json(
+        { key: { id: row.id, name: row.name, prefix: row.prefix }, secret: material.secret },
+        201,
+      )
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/api-keys/{id}',
+      tags: ['api-keys'],
+      summary: 'Revoke an API key',
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ ok: z.boolean() }), 'Revoked'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const revoked = await apiKeys.revoke(c.get('workspaceId'), id)
+      return revoked ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
+    },
+  )
+
+  /* ---------- webhooks (per form) ---------- */
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}/webhooks',
+      tags: ['webhooks'],
+      summary: 'List webhooks with recent delivery history',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(z.object({ webhooks: z.array(webhookDto) }), 'Webhooks'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const workspaceId = c.get('workspaceId')
+      // a foreign form must 404, not leak an empty list
+      if ((await forms.get(workspaceId, id)) === null) return c.json(NOT_FOUND, 404)
+      const rows = await webhooks.list(workspaceId, id)
+      const out = await Promise.all(
+        rows.map(async (row) => ({
+          id: row.id,
+          url: row.url,
+          active: row.active,
+          lastStatus: row.lastStatus,
+          lastError: row.lastError,
+          lastAttemptAt: row.lastAttemptAt?.toISOString() ?? null,
+          createdAt: row.createdAt.toISOString(),
+          deliveries: (await webhooks.deliveries(workspaceId, id, row.id, 10)).map((delivery) => ({
+            id: delivery.id,
+            event: delivery.event,
+            attempt: delivery.attempt,
+            status: delivery.status,
+            error: delivery.error,
+            durationMs: delivery.durationMs,
+            createdAt: delivery.createdAt.toISOString(),
+          })),
+        })),
+      )
+      return c.json({ webhooks: out }, 200)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms/{id}/webhooks',
+      tags: ['webhooks'],
+      summary: 'Add a webhook — the signing secret is returned ONCE',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam, body: jsonBody(createWebhookInput) },
+      responses: {
+        201: jsonResponse(
+          z.object({
+            webhook: z.object({ id: z.string(), url: z.string() }),
+            secret: z.string(),
+          }),
+          'The webhook — copy the signing secret now',
+        ),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const { url } = c.req.valid('json')
+      const secret = generateWebhookSecret()
+      const row = await webhooks.create(c.get('workspaceId'), id, url, secret)
+      if (row === null) return c.json(NOT_FOUND, 404)
+      return c.json({ webhook: { id: row.id, url: row.url }, secret }, 201)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/forms/{id}/webhooks/{webhookId}',
+      tags: ['webhooks'],
+      summary: 'Delete a webhook',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam.extend({ webhookId: z.string() }) },
+      responses: {
+        200: jsonResponse(z.object({ ok: z.boolean() }), 'Deleted'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id, webhookId } = c.req.valid('param')
+      if (!isUuid(id) || !isUuid(webhookId)) return c.json(NOT_FOUND, 404)
+      const removed = await webhooks.remove(c.get('workspaceId'), id, webhookId)
+      return removed ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
+    },
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/forms/{id}/webhooks/{webhookId}/test',
+      tags: ['webhooks'],
+      summary: 'Fire a signed ping at the webhook (single attempt)',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam.extend({ webhookId: z.string() }) },
+      responses: {
+        202: jsonResponse(z.object({ ok: z.boolean() }), 'Ping enqueued'),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+        503: jsonResponse(errorDto, 'Queue unavailable'),
+      },
+    }),
+    async (c) => {
+      const { id, webhookId } = c.req.valid('param')
+      if (!isUuid(id) || !isUuid(webhookId)) return c.json(NOT_FOUND, 404)
+      if (deps.queue === undefined) return c.json({ error: 'queue unavailable' }, 503)
+      const hook = await webhooks.get(c.get('workspaceId'), id, webhookId)
+      if (hook === null) return c.json(NOT_FOUND, 404)
+      await deps.queue.send(
+        'webhook.deliver',
+        { webhookId: hook.id, formId: id, event: 'ping' },
+        { retryLimit: 0 },
+      )
+      return c.json({ ok: true }, 202)
+    },
+  )
+
+  /* ---------- meta & import ---------- */
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/meta',
+      tags: ['meta'],
+      summary: 'Instance capabilities (drives UI hints)',
+      responses: {
+        200: jsonResponse(z.object({ mailConfigured: z.boolean() }), 'Capabilities'),
+      },
+    }),
+    async (c) => c.json({ mailConfigured: deps.mail?.configured ?? false }, 200),
+  )
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/import',
+      tags: ['meta'],
+      summary: 'Import local-first forms with their published snapshots',
+      request: { body: jsonBody(importInput) },
+      responses: {
+        201: jsonResponse(
+          z.object({ imported: z.array(z.object({ sourceId: z.string(), id: z.string() })) }),
+          'Imported forms (browser id → server id)',
+        ),
+      },
+    }),
+    async (c) => {
       const body = c.req.valid('json')
       const imported: { sourceId: string; id: string }[] = []
       for (const entry of body.forms) {
@@ -255,9 +813,35 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         imported.push({ sourceId: entry.sourceId, id: row.id })
       }
       return c.json({ imported }, 201)
-    })
+    },
+  )
+
+  /* ---------- the spec itself ---------- */
+
+  app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
+    type: 'http',
+    scheme: 'bearer',
+    description: 'API key (`fsk_…`) from /settings/api-keys',
+  })
+  app.doc('/openapi.json', {
+    openapi: '3.1.0',
+    info: {
+      title: 'Formsmith API',
+      version: '1.0.0',
+      description:
+        'The Formsmith data plane. Dashboard sessions and bearer API keys share the same routes; submissions are always re-evaluated server-side.',
+    },
+  })
 
   return app
 }
 
 export type AppType = ReturnType<typeof createApi>
+
+export {
+  type DeliverJob,
+  type NotifyJob,
+  startWorkers,
+  WEBHOOK_RETRY,
+  type WorkerDeps,
+} from './workers'

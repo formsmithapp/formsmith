@@ -19,6 +19,9 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
+  /** BYO SMTP — unset means notifications degrade gracefully (NoopMail). */
+  SMTP_URL: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
 })
 
 export type ServerEnv = z.infer<typeof envSchema>
