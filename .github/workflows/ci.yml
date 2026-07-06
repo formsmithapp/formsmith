@@ -18,5 +18,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # engine + renderer run their suites in real chromium (vitest browser
+      # mode — the isomorphism proof), so the runner needs the browser
+      - run: pnpm --filter @formsmithapp/engine exec playwright install --with-deps chromium
       - run: pnpm turbo build typecheck test
       - run: pnpm lint
