@@ -483,3 +483,30 @@ it('moves focus to the ending heading on completion (not lost to body)', async (
     expect(active?.textContent).toContain('Thanks, Ada!')
   })
 })
+
+it('advertises input purpose on contact fields via autocomplete (WCAG 1.3.5)', async () => {
+  const form: FormDefinition = {
+    id: 'r_ac',
+    version: 1,
+    blocks: [
+      { id: 'b_w', ref: 'w', type: 'welcome', title: 'Hi' },
+      { id: 'b_e', ref: 'e', type: 'email', title: 'Email?' },
+      { id: 'b_p', ref: 'p', type: 'phone', title: 'Phone?' },
+      { id: 'b_u', ref: 'u', type: 'website', title: 'Site?' },
+      { id: 'b_end', ref: 'end', type: 'thankyou', title: 'Done' },
+    ],
+  }
+  const { host } = mountForm(form)
+  await settled(host, 'Hi')
+  const autocompleteNow = () => host.querySelector('.fsr-input')?.getAttribute('autocomplete')
+
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'Email?')
+  expect(autocompleteNow()).toBe('email')
+  await userEvent.keyboard('{Enter}') // optional + empty advances
+  await settled(host, 'Phone?')
+  expect(autocompleteNow()).toBe('tel')
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'Site?')
+  expect(autocompleteNow()).toBe('url')
+})

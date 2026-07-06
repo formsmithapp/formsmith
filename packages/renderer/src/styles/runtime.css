@@ -339,6 +339,17 @@
   max-width: 100%;
 }
 
+/* Windows High Contrast / forced-colors: HCM overrides the brand background
+   that conveys selection, and scale tiles have no check glyph, so give the
+   selected choice and tile a system-color outline. */
+@media (forced-colors: active) {
+  .fsr-choice[data-selected="true"],
+  .fsr-tile[data-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
 /* ---- dropdown (combobox) ---- */
 .fsr-combo {
   position: relative;

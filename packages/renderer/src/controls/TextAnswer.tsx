@@ -16,6 +16,14 @@ const PLACEHOLDER: Record<string, string> = {
   website: 'https://',
 }
 
+// WCAG 1.3.5 Identify Input Purpose: advertise the field's purpose so browsers
+// and assistive tech can autofill. Generic text has no purpose token, so "off".
+const AUTOCOMPLETE: Record<string, string> = {
+  email: 'email',
+  phone: 'tel',
+  website: 'url',
+}
+
 /** short_text, email, phone, website, ai_followup — the serif underline input. */
 export function TextAnswer(props: ControlProps) {
   const engine = useEngine()
@@ -36,7 +44,7 @@ export function TextAnswer(props: ControlProps) {
       aria-describedby={describedBy(props)}
       aria-invalid={props.invalid || undefined}
       aria-required={props.block.required || undefined}
-      autoComplete="off"
+      autoComplete={AUTOCOMPLETE[props.block.type] ?? 'off'}
       data-fsr-autofocus
     />
   )
