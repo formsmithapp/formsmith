@@ -25,7 +25,12 @@ export {
   createDefaultRegistry,
   isEmptyValue,
 } from './registry'
-export { type EvaluateOptions, evaluateSubmission } from './server'
+export {
+  createSubmissionEvaluator,
+  type EvaluateOptions,
+  evaluateSubmission,
+  type SubmissionEvaluator,
+} from './server'
 export type { EngineStore } from './store'
 export { escapeHtml, pipeText } from './text'
 export type * from './types'

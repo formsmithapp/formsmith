@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { InMemoryLruCache } from '@formsmithapp/adapters'
 import { resolveProviders } from '@formsmithapp/ai'
 import { createApi } from '@formsmithapp/api'
 import { handle } from 'hono/vercel'
@@ -27,6 +28,8 @@ function getHandler() {
       ai: provider === null ? undefined : { provider },
       signingSecret: serverEnv().BETTER_AUTH_SECRET,
       submitRatePerMinute: serverEnv().FORMSMITH_SUBMIT_RATE,
+      // v1.1: REDIS_URL swaps this for a RedisCache behind the same interface
+      cache: new InMemoryLruCache(serverEnv().FORMSMITH_CACHE_MAX_ITEMS ?? 500),
     })
     handler = handle(api)
   }

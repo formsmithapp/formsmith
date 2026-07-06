@@ -49,6 +49,7 @@ never break** because a dependency is missing.
 | `FORMSMITH_DISABLE_SIGNUP` | no | `true` closes registration once you have your account |
 | `WEBHOOK_ALLOW_PRIVATE` | no | `true` lets webhooks deliver to private/loopback addresses (e.g. n8n on the same box). Keep it off on internet-facing instances |
 | `FORMSMITH_SUBMIT_RATE` | no | Submissions per IP per form per minute (default 60). Raise it when many respondents share one network (classrooms, offices) |
+| `FORMSMITH_CACHE_MAX_ITEMS` | no | In-memory cache size for published forms and rate-limit windows (default 500) |
 
 ## TLS and a domain (reverse proxy)
 

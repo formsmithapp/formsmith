@@ -4,9 +4,9 @@
 import { validateBlockProperties } from '@formsmithapp/blocks'
 import {
   createEngine,
-  evaluateSubmission,
   type FormDefinition,
   FormValidationError,
+  type SubmissionEvaluator,
   type SubmissionIssue,
 } from '@formsmithapp/engine'
 
@@ -41,16 +41,18 @@ export interface SubmitOutcome {
   ending: string | null
 }
 
-/** The trust boundary — recompute everything, trust nothing (v1 §12 #6). */
-export function evaluate(
-  snapshot: FormDefinition,
+/** The trust boundary — recompute everything, trust nothing (v1 §12 #6).
+ * Takes a compiled evaluator so hosts can reuse one per (form, version) —
+ * snapshot compilation dominates per-submission CPU. */
+export function evaluateWith(
+  evaluator: SubmissionEvaluator,
   payload: {
     answers: Record<string, unknown>
     variables?: Record<string, unknown>
     hiddenFields?: Record<string, string>
   },
 ): SubmitOutcome {
-  const result = evaluateSubmission(snapshot, {
+  const result = evaluator({
     answers: payload.answers,
     variables: payload.variables,
     hiddenFields: payload.hiddenFields,

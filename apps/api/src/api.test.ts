@@ -588,3 +588,88 @@ describe('S5: hardening', () => {
     expect(res.status).toBe(413)
   })
 })
+
+describe('S5b: the cache layer', () => {
+  it('publish busts the latest-snapshot cache — v2 serves IMMEDIATELY', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    // warm the latest-pointer cache as a respondent
+    currentUser = null
+    const v1 = (await (await app.request(`/api/v1/f/${id}`)).json()) as {
+      form: { version: number }
+    }
+    expect(v1.form.version).toBe(1)
+
+    // owner edits + republishes
+    currentUser = 'alice'
+    await app.request(`/api/v1/forms/${id}`, {
+      ...json({ doc: { ...quizDoc(), id, title: 'Edited for v2' } }),
+      method: 'PUT',
+    })
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    // no 60s staleness on this instance: the bust makes v2 immediate
+    currentUser = null
+    const v2 = (await (await app.request(`/api/v1/f/${id}`)).json()) as {
+      form: { version: number; title: string }
+    }
+    expect(v2.form.version).toBe(2)
+    expect(v2.form.title).toBe('Edited for v2')
+  })
+
+  it('a BROKEN cache never fails a request (fail-open proven end to end)', async () => {
+    const poisoned = {
+      get: async () => {
+        throw new Error('redis down')
+      },
+      set: async () => {
+        throw new Error('redis down')
+      },
+      delete: async () => {
+        throw new Error('redis down')
+      },
+      incr: async () => {
+        throw new Error('redis down')
+      },
+    }
+    const brokenApp = createApi({
+      db,
+      getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+      cache: poisoned,
+    })
+
+    const create = await brokenApp.request('/api/v1/forms', json({ doc: quizDoc() }))
+    expect(create.status).toBe(201)
+    const { form } = (await create.json()) as { form: FormDefinition }
+    await brokenApp.request(`/api/v1/forms/${form.id}/publish`, { method: 'POST' })
+
+    currentUser = null
+    expect((await brokenApp.request(`/api/v1/f/${form.id}`)).status).toBe(200)
+    const submit = await brokenApp.request(
+      `/api/v1/f/${form.id}/responses`,
+      json({ answers: { plan: 'pro' } }),
+    )
+    expect(submit.status).toBe(201) // limiter degraded OPEN, snapshot read fell through
+    currentUser = 'alice'
+  })
+
+  it('the compiled-evaluator memo keeps the trust boundary intact across reuse', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    currentUser = null
+    // same (form, version) evaluated repeatedly — the SECOND run uses the memo
+    const ok1 = await app.request(`/api/v1/f/${id}/responses`, json({ answers: { plan: 'pro' } }))
+    expect(ok1.status).toBe(201)
+    const tampered = await app.request(
+      `/api/v1/f/${id}/responses`,
+      json({ answers: { plan: 'starter' }, variables: { score: 999 } }),
+    )
+    expect(tampered.status).toBe(422) // memoized evaluator still rejects tampering
+    const ok2 = await app.request(`/api/v1/f/${id}/responses`, json({ answers: { plan: 'pro' } }))
+    expect(ok2.status).toBe(201)
+    const body = (await ok2.json()) as { variables: Record<string, unknown> }
+    expect(body.variables).toEqual({ score: 10 }) // recomputed, not cached
+  })
+})

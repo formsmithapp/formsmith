@@ -43,6 +43,8 @@ const envSchema = z.object({
   WEBHOOK_ALLOW_PRIVATE: z.string().optional(),
   /** Public submit endpoint rate limit per ip+form, per minute. Default 60. */
   FORMSMITH_SUBMIT_RATE: z.coerce.number().int().positive().optional(),
+  /** Max entries in the in-memory cache (snapshots, rate windows). Default 500. */
+  FORMSMITH_CACHE_MAX_ITEMS: z.coerce.number().int().positive().optional(),
 })
 
 /** Shared truthiness rule for the self-host env toggles. */

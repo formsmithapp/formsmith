@@ -54,8 +54,33 @@ export function evaluateSubmission(
   submission: Submission,
   options: EvaluateOptions = {},
 ): EvaluationResult {
+  return createSubmissionEvaluator(form, options)(submission)
+}
+
+/** A reusable evaluator over one parsed form — see {@link createSubmissionEvaluator}. */
+export type SubmissionEvaluator = (submission: Submission) => EvaluationResult
+
+/**
+ * The separable compile step of {@link evaluateSubmission}: parsing the form
+ * (including JSONLogic rule compilation) dominates per-submission CPU, and a
+ * published snapshot is immutable per version — so hosts can compile once per
+ * (form, version) and evaluate many times. The returned function is pure and
+ * safe to share across requests.
+ */
+export function createSubmissionEvaluator(
+  form: FormDefinition,
+  options: EvaluateOptions = {},
+): SubmissionEvaluator {
   const parsed: ParsedForm = parseForm(form, options.registry)
   const limits = { ...DEFAULT_SUBMISSION_LIMITS, ...options.limits }
+  return (submission) => evaluateParsed(parsed, limits, submission)
+}
+
+function evaluateParsed(
+  parsed: ParsedForm,
+  limits: Required<SubmissionLimits>,
+  submission: Submission,
+): EvaluationResult {
   const issues: SubmissionIssue[] = []
   const reject = (issue: SubmissionIssue) => {
     issues.push(issue)

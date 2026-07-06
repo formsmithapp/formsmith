@@ -1,7 +1,13 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { MailAdapter, QueueAdapter } from '@formsmithapp/adapters'
+import {
+  type CacheAdapter,
+  InMemoryLruCache,
+  type MailAdapter,
+  type QueueAdapter,
+  safeCache,
+} from '@formsmithapp/adapters'
 import { generateFollowup, generateFormDocument, type ModelProvider } from '@formsmithapp/ai'
 import type { Database } from '@formsmithapp/db'
 import {
@@ -12,7 +18,11 @@ import {
   webhooksRepository,
   workspaceForUser,
 } from '@formsmithapp/db'
-import type { FormDefinition } from '@formsmithapp/engine'
+import {
+  createSubmissionEvaluator,
+  type FormDefinition,
+  type SubmissionEvaluator,
+} from '@formsmithapp/engine'
 import {
   aiFollowupInput,
   createApiKeyInput,
@@ -29,8 +39,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { createMiddleware } from 'hono/factory'
 import { type ExchangeTuple, signExchange, verifyExchange } from './ai-sign'
 import { generateApiKey, generateWebhookSecret, hashApiKey } from './keys'
-import { createRateLimiter } from './rate-limit'
-import { evaluate, isUuid, validateFormDocument } from './service'
+import { evaluateWith, isUuid, validateFormDocument } from './service'
 import { WEBHOOK_RETRY } from './workers'
 
 /**
@@ -55,6 +64,10 @@ export interface ApiDeps {
   /** Public submit limit per ip+form per minute (FORMSMITH_SUBMIT_RATE).
    * Default 60 — raise it when many respondents share one NAT'd IP. */
   submitRatePerMinute?: number
+  /** Serializable-value cache (snapshots, rate windows, workspace lookups).
+   * Absent → an internal in-memory LRU. Wrapped fail-open either way: a
+   * broken cache slows requests down, it never fails them. */
+  cache?: CacheAdapter
 }
 
 interface Env {
@@ -147,21 +160,57 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   const todayUtc = () => new Date().toISOString().slice(0, 10)
 
-  // S5 hardening: every surface has a DECIDED ceiling (in-memory sliding
-  // windows — single-instance v1; a CacheAdapter backend is hosted-scale work)
-  const keyLimiter = createRateLimiter({ windowMs: 60_000, max: 600 })
-  const submitLimiter = createRateLimiter({
-    windowMs: 60_000,
-    max: deps.submitRatePerMinute ?? 60,
-  })
+  // Tier 1 — serializable-value cache (fail-open by construction). Backed by
+  // the in-memory LRU in v1; a Redis implementation slots in via deps.cache.
+  const cache = safeCache(deps.cache ?? new InMemoryLruCache(500))
+
+  // S5 hardening: every surface has a DECIDED ceiling. Fixed-window counters
+  // on the cache adapter, so limits go cross-instance the day Redis arrives.
+  const overLimit = async (surface: string, key: string, max: number, windowSeconds: number) =>
+    (await cache.incr(`fs:rl:${surface}:${key}`, windowSeconds)) > max
+
+  // Tier 2 — compiled snapshot evaluators. Live closures, so NEVER behind the
+  // CacheAdapter; published versions are immutable, so no invalidation — just
+  // a size bound with LRU refresh.
+  const EVALUATOR_MEMO_MAX = 200
+  const evaluators = new Map<string, SubmissionEvaluator>()
+  const evaluatorFor = (formId: string, version: number, doc: FormDefinition) => {
+    const key = `${formId}:${version}`
+    const hit = evaluators.get(key)
+    if (hit !== undefined) {
+      evaluators.delete(key)
+      evaluators.set(key, hit)
+      return hit
+    }
+    const compiled = createSubmissionEvaluator(doc)
+    evaluators.set(key, compiled)
+    if (evaluators.size > EVALUATOR_MEMO_MAX) {
+      const oldest = evaluators.keys().next().value
+      if (oldest !== undefined) evaluators.delete(oldest)
+    }
+    return compiled
+  }
+
+  /** Every authed request resolves a workspace — 30 s of cache takes a DB
+   * round trip off the whole dashboard/API surface (memberships are
+   * effectively static in v1's single-user workspaces). */
+  const workspaceIdForUser = async (userId: string): Promise<string | null> => {
+    const key = `fs:ws-user:${userId}`
+    const hit = await cache.get<string>(key)
+    if (hit !== null) return hit
+    const workspace = await workspaceForUser(deps.db, userId)
+    if (workspace === null) return null
+    await cache.set(key, workspace.id, 30)
+    return workspace.id
+  }
 
   /** Session first, then `Authorization: Bearer fsk_…` — the public REST API. */
   const requireWorkspace = createMiddleware<Env>(async (c, next) => {
     const session = await deps.getSession(c.req.raw.headers)
     if (session !== null) {
-      const workspace = await workspaceForUser(deps.db, session.userId)
-      if (workspace === null) return c.json({ error: 'no workspace' }, 403)
-      c.set('workspaceId', workspace.id)
+      const workspaceId = await workspaceIdForUser(session.userId)
+      if (workspaceId === null) return c.json({ error: 'no workspace' }, 403)
+      c.set('workspaceId', workspaceId)
       c.set('authVia', 'session')
       return next()
     }
@@ -171,7 +220,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       if (key !== null) {
         // generous ceiling per key — protects a self-hoster's box from a
         // runaway script without ever biting a legitimate export
-        if (!keyLimiter.allow(key.id)) return c.json({ error: 'rate limited' }, 429)
+        if (await overLimit('key', key.id, 600, 60)) return c.json({ error: 'rate limited' }, 429)
         c.set('workspaceId', key.workspaceId)
         c.set('authVia', 'key')
         // metrics/telemetry must never fail a request
@@ -187,18 +236,27 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   const requireSession = createMiddleware<Env>(async (c, next) => {
     const session = await deps.getSession(c.req.raw.headers)
     if (session === null) return c.json({ error: 'unauthorized' }, 401)
-    const workspace = await workspaceForUser(deps.db, session.userId)
-    if (workspace === null) return c.json({ error: 'no workspace' }, 403)
-    c.set('workspaceId', workspace.id)
+    const workspaceId = await workspaceIdForUser(session.userId)
+    if (workspaceId === null) return c.json({ error: 'no workspace' }, 403)
+    c.set('workspaceId', workspaceId)
     c.set('authVia', 'session')
     await next()
   })
 
-  async function snapshotForSubmit(
+  /** Published-snapshot reads, cached. Version-pinned docs are immutable
+   * (long TTL, no invalidation); the latest-pointer lives 60 s — the same
+   * staleness the HTTP layer already serves (`Cache-Control: max-age=60`) —
+   * and publish/delete bust it for same-instance immediacy. Misses (drafts,
+   * unknown ids) are deliberately NOT cached: a 404 must heal the instant a
+   * form is published. */
+  async function cachedSnapshot(
     formId: string,
-    version: number | undefined,
+    version?: number,
   ): Promise<{ doc: FormDefinition; version: number } | null> {
     if (version !== undefined) {
+      const key = `fs:snapshot:${formId}:${version}`
+      const hit = await cache.get<FormDefinition>(key)
+      if (hit !== null) return { doc: hit, version }
       const rows = await deps.db
         .select({ doc: schema.formVersions.doc })
         .from(schema.formVersions)
@@ -207,10 +265,18 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         )
         .limit(1)
       const doc = rows[0]?.doc
-      return doc === undefined ? null : { doc, version }
+      if (doc === undefined) return null
+      await cache.set(key, doc, 3_600)
+      return { doc, version }
     }
+    const key = `fs:snapshot-latest:${formId}`
+    const hit = await cache.get<{ doc: FormDefinition; version: number }>(key)
+    if (hit !== null) return hit
     const doc = await forms.getPublicSnapshot(formId)
-    return doc === null || doc.version === undefined ? null : { doc, version: doc.version }
+    if (doc === null || doc.version === undefined) return null
+    const result = { doc, version: doc.version }
+    await cache.set(key, result, 60)
+    return result
   }
 
   const summarize = (row: {
@@ -287,10 +353,10 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
-      const doc = await forms.getPublicSnapshot(id)
-      if (doc === null) return c.json(NOT_FOUND, 404)
+      const snapshot = await cachedSnapshot(id)
+      if (snapshot === null) return c.json(NOT_FOUND, 404)
       c.header('Cache-Control', 'public, max-age=60') // immutable per version
-      return c.json({ form: doc as unknown as Record<string, unknown> }, 200)
+      return c.json({ form: snapshot.doc as unknown as Record<string, unknown> }, 200)
     },
   )
 
@@ -311,11 +377,12 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
-      if (!submitLimiter.allow(`${clientIp(c.req.raw.headers)}:${id}`)) {
+      const submitMax = deps.submitRatePerMinute ?? 60
+      if (await overLimit('submit', `${clientIp(c.req.raw.headers)}:${id}`, submitMax, 60)) {
         return c.json({ error: 'rate limited' }, 429)
       }
       const payload = c.req.valid('json')
-      const snapshot = await snapshotForSubmit(id, payload.formVersion)
+      const snapshot = await cachedSnapshot(id, payload.formVersion)
       if (snapshot === null) return c.json(NOT_FOUND, 404)
 
       // honeypot tripped → accept-and-discard: a 201 indistinguishable from
@@ -338,7 +405,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         )
       }
 
-      const outcome = evaluate(snapshot.doc, payload)
+      const outcome = evaluateWith(evaluatorFor(id, snapshot.version, snapshot.doc), payload)
       if (!outcome.ok) return c.json({ error: 'rejected', issues: outcome.issues }, 422)
 
       // AI exchanges: every server-issued question carries a signature — an
@@ -414,9 +481,6 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   /* ---------- public: the AI follow-up exchange ---------- */
 
-  // in-slice guard: this endpoint spends the operator's LLM budget
-  const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 30 })
-
   app.openapi(
     createRoute({
       method: 'post',
@@ -434,16 +498,17 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
-      if (!aiLimiter.allow(`${clientIp(c.req.raw.headers)}:${id}`)) {
+      // this endpoint spends the operator's LLM budget
+      if (await overLimit('ai', `${clientIp(c.req.raw.headers)}:${id}`, 30, 60)) {
         return c.json({ error: 'rate limited' }, 429)
       }
       const input = c.req.valid('json')
       const secret = deps.signingSecret
       if (secret === undefined) return c.json({ done: true, reason: 'ai_unconfigured' }, 200)
 
-      const snapshot = await forms.getPublicSnapshot(id)
+      const snapshot = (await cachedSnapshot(id))?.doc ?? null
       const block = snapshot?.blocks.find((b) => b.ref === input.ref && b.type === 'ai_followup')
-      if (snapshot === undefined || snapshot === null || block === undefined) {
+      if (snapshot === null || block === undefined) {
         return c.json(NOT_FOUND, 404)
       }
       const properties = (block.properties ?? {}) as {
@@ -634,6 +699,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const removed = await forms.remove(c.get('workspaceId'), id)
+      if (removed) await cache.delete(`fs:snapshot-latest:${id}`)
       return removed ? c.json({ ok: true }, 200) : c.json(NOT_FOUND, 404)
     },
   )
@@ -660,6 +726,8 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       const issues = validateFormDocument(row.doc)
       if (issues.length > 0) return c.json({ error: 'invalid', issues }, 422)
       const result = await forms.publish(c.get('workspaceId'), id)
+      // the new version must serve immediately on this instance
+      if (result !== null) await cache.delete(`fs:snapshot-latest:${id}`)
       return result === null ? c.json(NOT_FOUND, 404) : c.json(result, 200)
     },
   )
@@ -984,8 +1052,6 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   /* ---------- AI form generation (session-only: the owner's key, the owner's click) ---------- */
 
-  const generateLimiter = createRateLimiter({ windowMs: 3_600_000, max: 10 })
-
   app.openapi(
     createRoute({
       method: 'post',
@@ -1005,7 +1071,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       if (c.get('authVia') !== 'session') return c.json({ error: 'session required' }, 403)
       if (deps.ai === undefined) return c.json({ error: 'ai not configured' }, 503)
       const workspaceId = c.get('workspaceId')
-      if (!generateLimiter.allow(workspaceId)) return c.json({ error: 'rate limited' }, 429)
+      if (await overLimit('generate', workspaceId, 10, 3_600)) {
+        return c.json({ error: 'rate limited' }, 429)
+      }
       const { prompt } = c.req.valid('json')
       try {
         const doc = await generateFormDocument(deps.ai.provider, prompt)
