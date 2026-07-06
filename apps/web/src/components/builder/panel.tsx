@@ -26,19 +26,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({
   label,
   error,
+  hint,
   children,
 }: {
   label: string
   error?: string
+  hint?: string
   children: React.ReactNode
 }) {
   return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: the control is wrapped as {children} — the wrapped-label pattern
+    // biome-ignore lint/a11y/noLabelWithoutControl: the control is wrapped as {children}, the wrapped-label pattern
     <label className="block">
       <span className="mb-1.5 block font-mono text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">
         {label}
       </span>
       {children}
+      {hint !== undefined && (
+        <span className="mt-1 block text-[11.5px] leading-snug text-fg-3">{hint}</span>
+      )}
       {error !== undefined && <span className="mt-1 block text-[11.5px] text-error">{error}</span>}
     </label>
   )
@@ -52,6 +57,7 @@ function TextField({
   value,
   placeholder,
   error,
+  hint,
   multiline = false,
   onCommit,
 }: {
@@ -59,11 +65,12 @@ function TextField({
   value: string
   placeholder?: string
   error?: string
+  hint?: string
   multiline?: boolean
   onCommit: (next: string) => void
 }) {
   return (
-    <Field label={label} error={error}>
+    <Field label={label} error={error} hint={hint}>
       {multiline ? (
         <textarea
           value={value}
@@ -88,15 +95,17 @@ function NumberField({
   label,
   value,
   error,
+  hint,
   onCommit,
 }: {
   label: string
   value: number | undefined
   error?: string
+  hint?: string
   onCommit: (next: number | undefined) => void
 }) {
   return (
-    <Field label={label} error={error}>
+    <Field label={label} error={error} hint={hint}>
       <input
         value={value ?? ''}
         inputMode="decimal"
@@ -139,7 +148,7 @@ function ToggleRow({
   )
 }
 
-/** Per-type property controls (plan D5) — validated by the blocks schemas. */
+/** Per-type property controls (plan D5), validated by the blocks schemas. */
 function TypeSettings({ block, issues }: { block: Block; issues: Map<string, string> }) {
   const store = useBuilder()
   const text = (key: string): string => {
@@ -223,6 +232,7 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
           <NumberField
             label="Step"
             value={num('step')}
+            hint="The amount each arrow press or entry snaps to, e.g. 0.5. Leave blank for whole numbers."
             error={issues.get('step')}
             onCommit={(v) => set('step', v)}
           />
@@ -315,6 +325,7 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
             label="Redirect URL"
             value={text('redirectUrl')}
             placeholder="https://…"
+            hint="Sends respondents here automatically when they finish, in the same tab. Leave blank to keep them on the ending screen."
             error={issues.get('redirectUrl')}
             onCommit={(v) => set('redirectUrl', v)}
           />
@@ -322,6 +333,7 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
             label="Button label"
             value={text('ctaLabel')}
             placeholder="Visit our site"
+            hint="Text for an optional button on the ending screen. It only shows when a Button URL is set too."
             error={issues.get('ctaLabel')}
             onCommit={(v) => set('ctaLabel', v)}
           />
@@ -329,6 +341,7 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
             label="Button URL"
             value={text('ctaUrl')}
             placeholder="https://…"
+            hint="Where the button goes. Opens in a new tab on click. If a Redirect URL is set, the automatic redirect takes over instead."
             error={issues.get('ctaUrl')}
             onCommit={(v) => set('ctaUrl', v)}
           />
@@ -348,6 +361,7 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
           <NumberField
             label="Max follow-ups"
             value={num('maxFollowups') ?? 1}
+            hint="The most adaptive questions to ask before moving on. Higher digs deeper but takes respondents longer."
             error={issues.get('maxFollowups')}
             onCommit={(v) => set('maxFollowups', v)}
           />
@@ -380,7 +394,11 @@ function RefField({ block }: { block: Block }) {
 
   const taken = new Set(state.doc.blocks.filter((b) => b.id !== block.id).map((b) => b.ref))
   return (
-    <Field label="Reference (piping)" error={error ?? undefined}>
+    <Field
+      label="Reference (piping)"
+      error={error ?? undefined}
+      hint="A unique, dot-free slug (a-z, 0-9, _). Pipe this answer into later questions with @ref, and target this block from logic and scoring."
+    >
       <input
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
@@ -390,7 +408,7 @@ function RefField({ block }: { block: Block }) {
             store.setRef(block.id, draft)
             setError(null)
           } else {
-            setError('Must be a unique, dot-free slug (a–z, 0–9, _)')
+            setError('Must be a unique, dot-free slug (a-z, 0-9, _)')
           }
         }}
         className={`${inputClass} font-mono text-[12px]`}
@@ -449,7 +467,7 @@ function BlockPanel({
   const answerable = !SCREEN_TYPES.has(block.type)
   const ai = block.type === 'ai_followup'
 
-  // Render-time schema validation — the same gate publish uses (field → first issue).
+  // Render-time schema validation, the same gate publish uses (field → first issue).
   const propertyIssues = new Map<string, string>()
   const result = validateBlockProperties(block.type, block.properties ?? {})
   if (!result.ok) {
