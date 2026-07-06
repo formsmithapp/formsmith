@@ -90,7 +90,9 @@ function RailRow({
           {...listeners}
           aria-label={`Reorder ${definition?.displayName ?? block.type}`}
           className={`touch-none text-fg-3 ${
-            pinned ? 'invisible' : 'cursor-grab opacity-0 group-hover:opacity-100'
+            pinned
+              ? 'invisible'
+              : 'cursor-grab opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
           }`}
         >
           <GripVertical size={13} />
@@ -118,7 +120,7 @@ function RailRow({
             </span>
           </span>
         </button>
-        <span className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-[1040px]:hidden">
+        <span className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-[1040px]:hidden">
           {block.type !== 'welcome' && (
             <button
               type="button"

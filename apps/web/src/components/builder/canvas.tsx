@@ -66,7 +66,7 @@ function ChoiceEditor({ block }: { block: Block }) {
             type="button"
             aria-label={`Remove choice ${index + 1}`}
             onClick={() => commit(choices.filter((_, i) => i !== index))}
-            className="grid size-6 place-items-center rounded-md text-fg-3 opacity-0 transition-opacity group-hover:opacity-100 hover:text-error"
+            className="grid size-6 place-items-center rounded-md text-fg-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-error"
           >
             <X size={13} />
           </button>
@@ -200,7 +200,7 @@ function RecallButton({ block }: { block: Block }) {
         type="button"
         aria-label="Insert recall token"
         onClick={() => setOpen((v) => !v)}
-        className="grid size-6 place-items-center rounded-md border border-line bg-surface-2 text-fg-3 opacity-0 transition-opacity group-hover/stage:opacity-100 hover:text-brand"
+        className="grid size-6 place-items-center rounded-md border border-line bg-surface-2 text-fg-3 opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100 hover:text-brand"
       >
         <Braces size={11} />
       </button>

@@ -191,6 +191,10 @@
   outline: none;
   border-bottom-color: var(--brand);
 }
+.fsr-input:focus-visible {
+  outline: 2px solid var(--brand-ring);
+  outline-offset: 2px;
+}
 .fsr-textarea {
   width: 100%;
   min-height: 120px;

@@ -42,7 +42,7 @@ export function InlineEdit({
       aria-label={label}
       tabIndex={0}
       data-placeholder={placeholder}
-      className={`editable cursor-text rounded-md transition-shadow focus:shadow-[0_0_0_3px_var(--brand-soft)] ${className ?? ''}`}
+      className={`editable cursor-text rounded-md transition-shadow focus:shadow-[0_0_0_2px_var(--brand-ring)] ${className ?? ''}`}
       onInput={(event) => onChange(event.currentTarget.textContent ?? '')}
       onKeyDown={(event) => {
         if (blurOnEnter && event.key === 'Enter') {
