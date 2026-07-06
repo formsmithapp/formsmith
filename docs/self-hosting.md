@@ -13,6 +13,19 @@ minutes.
 
 ## Quickstart
 
+The fastest path is the installer. It fetches `compose.yml`, generates your secrets into
+`.env`, and starts the two containers. It installs nothing on your system and sends no
+telemetry. Read it first if you like (it is the same [`install.sh`](../install.sh) that is in
+the repo):
+
+```bash
+curl -fsSL https://get.formsmith.app/install.sh -o install.sh
+less install.sh   # review
+sh install.sh
+```
+
+Or do exactly the same steps by hand:
+
 ```bash
 git clone https://github.com/formsmithapp/formsmith
 cd formsmith

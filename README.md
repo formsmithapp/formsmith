@@ -48,6 +48,23 @@ and developers who want to own their stack.
 
 ## Self-hosting
 
+**One command** (it just fetches `compose.yml`, generates your secrets, and runs the two
+containers; it installs nothing and sends no telemetry):
+
+```bash
+curl -fsSL https://get.formsmith.app/install.sh | sh
+```
+
+Prefer to read it before you run it? Good instinct:
+
+```bash
+curl -fsSL https://get.formsmith.app/install.sh -o install.sh
+less install.sh          # it is the same script as install.sh in this repo
+sh install.sh
+```
+
+**Or do it by hand**, nothing magic:
+
 ```bash
 git clone https://github.com/formsmithapp/formsmith
 cd formsmith
