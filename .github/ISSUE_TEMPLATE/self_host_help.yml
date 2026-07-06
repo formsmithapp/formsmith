@@ -10,7 +10,7 @@ body:
         This template is for a **specific, reproducible** deployment problem (compose
         won't come up, migrations fail, a config setting doesn't behave as documented).
         For open-ended "how do I…" questions, please use
-        [Discussions](https://github.com/formsmithapp/formsmith/discussions) — you'll
+        [Discussions](https://github.com/formsmithapp/formsmith/discussions), you'll
         often get a faster answer there.
 
         Please read [docs/self-hosting.md](https://github.com/formsmithapp/formsmith/blob/main/docs/self-hosting.md) first.
@@ -52,7 +52,7 @@ body:
     id: config
     attributes:
       label: Relevant configuration
-      description: Your compose overrides and env keys. **Redact secrets — show key names, not values.**
+      description: Your compose overrides and env keys. **Redact secrets, show key names, not values.**
       render: shell
     validations:
       required: false

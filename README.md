@@ -6,13 +6,13 @@
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSING.md)
 [![Container: ghcr.io](https://img.shields.io/badge/ghcr.io-formsmithapp%2Fformsmith-2496ED?logo=docker&logoColor=white)](https://github.com/formsmithapp/formsmith/pkgs/container/formsmith)
 
-Formsmith is an open-source, self-hostable, AI-native form builder — immersive,
+Formsmith is an open-source, self-hostable, AI-native form builder: immersive,
 one-question-at-a-time forms with an AI interviewer that asks adaptive follow-up questions,
 running entirely on infrastructure you control.
 
-> **v0.1.0 — first public release.** Formsmith is live and self-hostable today: `docker compose up`
+> **v0.1.0, the first public release.** Formsmith is live and self-hostable today: `docker compose up`
 > gives you the builder, the AI interviewer, and every response on your own Postgres. This is a
-> deliberately quiet first release — real-world use, [issues](https://github.com/formsmithapp/formsmith/issues),
+> deliberately quiet first release. Real-world use, [issues](https://github.com/formsmithapp/formsmith/issues),
 > and [discussions](https://github.com/formsmithapp/formsmith/discussions) are exactly what it needs.
 > See the **[roadmap](docs/roadmap.md)** for what's next and why the cuts are deliberate.
 
@@ -22,11 +22,11 @@ running entirely on infrastructure you control.
 
 Three things, combined for the first time:
 
-- **Your forms. Your data. Your servers.** Self-host the whole thing with `docker compose up` —
+- **Your forms. Your data. Your servers.** Self-host the whole thing with `docker compose up`, 
   Postgres and nothing else required. No third party ever sees a response.
 - **Typeform-beautiful, open-source.** A keyboard-first, editorial respondent experience built with
-  genuine design care — not "another open-source form builder."
-- **Forms that interview — on your infrastructure.** Adaptive AI follow-ups powered by *your own
+  genuine design care, not "another open-source form builder."
+- **Forms that interview, on your infrastructure.** Adaptive AI follow-ups powered by *your own
   model and key*, disclosed to respondents, with a static fallback so a form never breaks when a
   model does. It is the only AI interviewer that runs on infrastructure you control.
 
@@ -39,12 +39,12 @@ and developers who want to own their stack.
   as a release criterion).
 - Conditional logic, jump/branching, calculated fields & scoring, answer piping.
 - A portable, framework-agnostic core engine that runs identically in the browser, Node, and at the
-  edge — client-side for instant UX, server-side for trust.
-- Every published form is a standalone, embeddable page — drop it into any site with an `<iframe>`
+  edge: client-side for instant UX, server-side for trust.
+- Every published form is a standalone, embeddable page. Drop it into any site with an `<iframe>`
   today. A tiny, zero-dependency embed SDK and React/Vue/Svelte wrappers are on the [roadmap](docs/roadmap.md).
 - HMAC-signed webhooks, a REST API with a generated OpenAPI spec, and full CSV/JSON export. Your data
   is never locked in.
-- Bring-your-own SMTP and LLM key; every integration is optional — features degrade, forms never break.
+- Bring-your-own SMTP and LLM key; every integration is optional, features degrade, forms never break.
 
 ## Self-hosting
 
@@ -52,12 +52,12 @@ and developers who want to own their stack.
 git clone https://github.com/formsmithapp/formsmith
 cd formsmith
 cp .env.example .env      # set BETTER_AUTH_SECRET (openssl rand -base64 32)
-docker compose up -d      # web + postgres — that's it
+docker compose up -d      # web + postgres, that's it
 ```
 
 Open `http://localhost:3000`, sign up, publish your first form. Migrations run on boot;
-upgrades are `docker compose pull && docker compose up -d`. The full walkthrough — TLS,
-configuration reference, backups, security defaults — is in
+upgrades are `docker compose pull && docker compose up -d`. The full walkthrough (TLS,
+configuration reference, backups, security defaults) is in
 **[docs/self-hosting.md](docs/self-hosting.md)**.
 
 No Redis, no object storage, and no cloud dependency required to run Formsmith. Optional capabilities
@@ -66,8 +66,8 @@ at the same adapter.
 
 ## Architecture at a glance
 
-Formsmith is a TypeScript monorepo. The core is deliberately portable — plain Postgres, a
-framework-agnostic engine, and cloud-neutral adapters — so it self-hosts anywhere.
+Formsmith is a TypeScript monorepo. The core is deliberately portable (plain Postgres, a
+framework-agnostic engine, and cloud-neutral adapters), so it self-hosts anywhere.
 
 ```
 packages/
@@ -87,32 +87,32 @@ modules/
 
 Planned (the MIT integration surface): a zero-dependency `embed` SDK, framework wrappers
 (React/Vue/Svelte), and an `sdk` client. Published forms are already frameable via `<iframe>`
-today — the wrappers are convenience on top.
+today. The wrappers are convenience on top.
 
 ## Licensing
 
 Formsmith is **open-core**. [`LICENSING.md`](LICENSING.md) is the authoritative map:
 
-- **Core** (engine, renderer, apps, AI orchestration, …) — **AGPL-3.0-only**. Self-host it, or even
+- **Core** (engine, renderer, apps, AI orchestration, …): **AGPL-3.0-only**. Self-host it, or even
   offer it as a service; you simply cannot take the core closed.
-- **Integration surface** (embed SDK, framework wrappers, API client) — **MIT** as it ships, so
+- **Integration surface** (embed SDK, framework wrappers, API client): **MIT** as it ships, so
   embedding a Formsmith form never raises copyleft questions for your own codebase. (Published forms
   are already embeddable via `<iframe>` today; the dedicated SDK and wrappers are forthcoming.)
-- **Enterprise modules** (`modules/ee`) — commercially licensed.
+- **Enterprise modules** (`modules/ee`): commercially licensed.
 
 And a public promise: the [Open-Core Covenant](OPEN-CORE-COVENANT.md) commits, in writing and in git
-history, that **the core stays AGPL — forever.**
+history, that **the core stays AGPL, forever.**
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Formsmith uses a Contributor
+Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Formsmith uses a Contributor
 License Agreement ([CLA.md](CLA.md)); a bot will ask you to accept it on your first pull request. The
 honest summary: you keep your copyright, and every contribution merged into an open package stays open
 under that package's license, permanently.
 
 ## Trademark
 
-"Formsmith" and the Formsmith logo are trademarks — see [TRADEMARK-POLICY.md](TRADEMARK-POLICY.md).
+"Formsmith" and the Formsmith logo are trademarks, see [TRADEMARK-POLICY.md](TRADEMARK-POLICY.md).
 You may self-host, describe, teach, and build on Formsmith freely; public forks must be renamed.
 
 ## Links
@@ -129,4 +129,4 @@ You may self-host, describe, teach, and build on Formsmith freely; public forks 
 
 ---
 
-*Independent and bootstrapped — built for the teams the incumbents lock out.*
+*Independent and bootstrapped, built for the teams the incumbents lock out.*

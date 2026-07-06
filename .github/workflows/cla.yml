@@ -1,7 +1,7 @@
 # Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# CLA Assistant — asks first-time contributors to accept CLA.md on their first PR,
+# CLA Assistant, asks first-time contributors to accept CLA.md on their first PR,
 # and records the signature. Uses the built-in GITHUB_TOKEN (no extra secret needed);
 # signatures are stored in this repo under .github/cla-signatures/.
 #
@@ -10,7 +10,7 @@
 # and can force a re-check by commenting "recheck".
 #
 # Later hardening (optional): store signatures in a separate PRIVATE repo instead by
-# setting PERSONAL_ACCESS_TOKEN + `remote-repository-name` below — keeps signer records
+# setting PERSONAL_ACCESS_TOKEN + `remote-repository-name` below, keeps signer records
 # out of the public tree. Not required for launch.
 name: CLA Assistant
 

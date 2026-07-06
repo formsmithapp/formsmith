@@ -3,17 +3,17 @@
 "Formsmith" and the Formsmith logo (when published) are trade names and trademarks of
 Gnana Siva Sai V (registration planned; unregistered rights are asserted in the
 meantime). The open-source licenses that cover Formsmith's code deliberately do **not**
-grant trademark rights — see the additional term under AGPL-3.0 section 7(e) recorded in
+grant trademark rights; see the additional term under AGPL-3.0 section 7(e) recorded in
 [NOTICE](NOTICE).
 
 The goal of this policy is the usual one: you should be able to talk about, build on,
-self-host, and redistribute Formsmith freely — while nobody is misled about what is and
+self-host, and redistribute Formsmith freely, while nobody is misled about what is and
 isn't the official project.
 
 ## You may, without asking
 
 - **Truthfully describe your work**: "built with Formsmith," "compatible with Formsmith,"
-  "a plugin for Formsmith," "managed hosting for Formsmith" — provided it's accurate and
+  "a plugin for Formsmith," "managed hosting for Formsmith", provided it's accurate and
   doesn't suggest endorsement or official status.
 - **Self-host Formsmith under its own name**, unmodified or with private modifications,
   including at an internal domain like `formsmith.yourcompany.com`.
@@ -24,7 +24,7 @@ isn't the official project.
 
 - Use "Formsmith" or the logo **in the name of your company, product, service, app,
   package, or domain** (e.g. "FormsmithPro", "formsmith-hosting.com").
-- **Distribute a modified fork under the Formsmith name or logo** — public forks must be
+- **Distribute a modified fork under the Formsmith name or logo**: public forks must be
   renamed and the logo removed. (Stating "a fork of Formsmith" is fine and encouraged.)
 - **Offer a hosted or commercial service under the Formsmith name** or in a way that
   implies it is the official service.

@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Formsmith ships a deliberately small, correct core and grows it in the open. Before
-        filing, it's worth skimming the [roadmap](https://github.com/formsmithapp/formsmith/blob/main/docs/roadmap.md) —
+        filing, it's worth skimming the [roadmap](https://github.com/formsmithapp/formsmith/blob/main/docs/roadmap.md), 
         your idea may already be planned, in which case a 👍 on the roadmap item or a
         comment about your use case is more useful than a new issue.
   - type: textarea

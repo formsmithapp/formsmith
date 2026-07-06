@@ -1,6 +1,6 @@
 # Formsmith
 
-> Formsmith is an open-source, self-hostable, AI-native form builder — beautiful,
+> Formsmith is an open-source, self-hostable, AI-native form builder, beautiful,
 > one-question-at-a-time conversational forms with an AI interviewer that asks adaptive
 > follow-up questions on your own model and key. The whole product self-hosts with two
 > containers (web + Postgres); every response stays on infrastructure you control. Licensing

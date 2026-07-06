@@ -14,7 +14,7 @@ section will list the supported version line(s).
 
 Report it privately, one of two ways:
 
-- **Preferred — GitHub private vulnerability reporting:** use the **"Report a vulnerability"** button
+- **Preferred, via GitHub private vulnerability reporting:** use the **"Report a vulnerability"** button
   under this repository's **Security** tab (GitHub Security Advisories).
 - **Email:** `gnana097@gmail.com` with `SECURITY` in the subject line.
 
@@ -29,7 +29,7 @@ If the details are sensitive, ask for a public key before sending them.
 
 ## What to expect
 
-Formsmith is currently maintained by a single founder, so responses are best-effort — but taken
+Formsmith is currently maintained by a single founder, so responses are best-effort, but taken
 seriously and handled promptly:
 
 - **Acknowledgement:** within 3 business days.
@@ -38,7 +38,7 @@ seriously and handled promptly:
   quickly as severity warrants. Please give us a reasonable window to remediate before any public
   disclosure.
 
-We're glad to credit you in the advisory — or to keep you anonymous. Your choice.
+We're glad to credit you in the advisory, or to keep you anonymous. Your choice.
 
 ## Scope
 
@@ -48,13 +48,13 @@ We're glad to credit you in the advisory — or to keep you anonymous. Your choi
   enterprise modules).
 - Self-hosted deployments running unmodified Formsmith with default configuration.
 
-When the hosted service (`formsmith.app`) launches, its infrastructure — and any bug-bounty terms —
+When the hosted service (`formsmith.app`) launches, its infrastructure (and any bug-bounty terms)
 will be added here.
 
 **Out of scope (examples)**
 
 - Vulnerabilities in third-party dependencies with no exploit path through Formsmith (report those
-  upstream — but do tell us so we can patch or bump).
+  upstream, but do tell us so we can patch or bump).
 - Findings that require a compromised host, physical access, or a self-inflicted misconfiguration not
   caused by our defaults.
 - Missing hardening with no demonstrated impact (e.g. "header X is absent") absent a concrete exploit.

@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 Formsmith exists so that beautiful conversational forms don't require handing your
 respondents' answers to someone else's cloud. When you self-host, **your data never leaves
-infrastructure you control** — and there's no asterisk on that.
+infrastructure you control**, and there's no asterisk on that.
 
 ## When you self-host, nothing phones home
 
@@ -21,22 +21,22 @@ infrastructure you control** — and there's no asterisk on that.
 
 ## The AI interviewer runs on your key
 
-The adaptive follow-up feature is the one place a form talks to a model — and it does so on
+The adaptive follow-up feature is the one place a form talks to a model, and it does so on
 **your** terms:
 
 - It uses **your own model and API key** (Anthropic, or any OpenAI-compatible endpoint).
-  Answers go from your server to the provider *you* chose — never through us.
+  Answers go from your server to the provider *you* chose, never through us.
 - **Your respondents' answers are never used to train anything.** Formsmith doesn't collect
   them; whether the model provider does is governed by *your* agreement with that provider,
   which you can pick accordingly.
-- The AI is **disclosed to respondents** — no one is secretly talking to a model.
+- The AI is **disclosed to respondents**, no one is secretly talking to a model.
 - If the model is slow, rate-limited, or down, the form **falls back to a static question**
   and keeps working. AI never becomes a single point of failure for your data collection.
 - No AI key configured? The feature degrades cleanly and the form still works.
 
 ## What's stored, and staying portable
 
-- Submissions are **re-evaluated server-side** — the stored answer is what your form's rules
+- Submissions are **re-evaluated server-side**, the stored answer is what your form's rules
   actually produce, never a value the client claimed. Trust is computed, not assumed.
 - You can **export everything** as CSV or JSON through the API at any time, and **delete**
   anything. Your data is never held hostage by a proprietary format or an export paywall.
@@ -54,12 +54,12 @@ instance ships with:
 - **Security headers** by default, and database **migrations applied automatically on boot**
   so an upgrade can't leave you on a half-migrated schema.
 
-Found a vulnerability? Please report it privately — see [`SECURITY.md`](../SECURITY.md).
+Found a vulnerability? Please report it privately, see [`SECURITY.md`](../SECURITY.md).
 
 ## Compliance posture (self-hosted)
 
 Because you run Formsmith, **you are the data controller.** Self-host it in whatever region
-and under whatever policies your obligations require — Formsmith doesn't move your data
+and under whatever policies your obligations require, Formsmith doesn't move your data
 somewhere you didn't choose. We make **no certification claims** (SOC 2, ISO, etc.) for the
 open-source project itself; certifications describe a hosting operation, and when you
 self-host, that operation is *yours*.

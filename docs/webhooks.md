@@ -1,7 +1,7 @@
 # Webhooks
 
 Every accepted response POSTs a JSON payload to your endpoint(s). Deliveries are signed,
-retried with exponential backoff on failure, and recorded — the Connect tab shows each
+retried with exponential backoff on failure, and recorded. The Connect tab shows each
 attempt's status, error, and duration.
 
 ## The payload
@@ -22,7 +22,7 @@ attempt's status, error, and duration.
 }
 ```
 
-`variables` are always server-recomputed — never client-supplied values. The **Send test**
+`variables` are always server-recomputed, never client-supplied values. The **Send test**
 button fires the same delivery with `"event": "ping"` and no `response`.
 
 ## Headers
@@ -31,13 +31,13 @@ button fires the same delivery with `"event": "ping"` and no `response`.
 |---|---|
 | `X-Formsmith-Event` | `response.created` or `ping` |
 | `X-Formsmith-Webhook-Id` | The webhook's id |
-| `X-Formsmith-Signature` | `t=<unix-seconds>,v1=<hex hmac>` — see below |
+| `X-Formsmith-Signature` | `t=<unix-seconds>,v1=<hex hmac>` (see below) |
 
 ## Verifying the signature
 
 The signature is an HMAC-SHA256 over `"<t>.<raw-body>"` using your webhook's signing secret
 (shown once when the webhook is created). The embedded timestamp makes captured requests
-replay-resistant — reject anything older than a few minutes.
+replay-resistant: reject anything older than a few minutes.
 
 1. Read `t` and `v1` from the `X-Formsmith-Signature` header.
 2. Reject if `|now − t|` exceeds your tolerance (we recommend 300 seconds).
@@ -77,7 +77,7 @@ def verify(secret: str, raw_body: bytes, header: str, tolerance: int = 300) -> b
     return hmac.compare_digest(expected, v1)
 ```
 
-Use the **raw request body bytes** — re-serializing the JSON will change the bytes and fail
+Use the **raw request body bytes**; re-serializing the JSON will change the bytes and fail
 verification.
 
 ## Delivery & retries
@@ -89,5 +89,5 @@ verification.
 
 ## Rotating a secret
 
-Delete the webhook and create it again — a fresh secret is generated. (Seamless rotation with
+Delete the webhook and create it again; a fresh secret is generated. (Seamless rotation with
 overlapping secrets is part of the enterprise offering.)

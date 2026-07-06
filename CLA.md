@@ -1,10 +1,10 @@
 # Formsmith Individual Contributor License Agreement (v1.0)
 
-## The honest summary — read this first
+## The honest summary: read this first
 
 - **You keep your copyright.** Your contribution stays yours; you can reuse your own code
   anywhere, anytime, for anything.
-- **You grant the Project Owner broad rights over your contribution — including the right
+- **You grant the Project Owner broad rights over your contribution, including the right
   to relicense it under other terms, including commercial and proprietary terms.** We say
   this plainly because it is the point: the open-core model (AGPL core + commercially
   licensed `modules/ee` + a hosted service) only works if contributions can be legally
@@ -13,11 +13,11 @@
   project's open-source license** (AGPL-3.0-only or MIT, per `LICENSING.md`). Published
   releases cannot be retracted, and the
   [Open-Core Covenant](OPEN-CORE-COVENANT.md) publicly commits that the core stays AGPL.
-- **You promise the code is yours to give** — or you tell us which parts aren't.
+- **You promise the code is yours to give**, or you tell us which parts aren't.
 - **You take on no support or warranty obligations.**
 
 If any part of the full text below appears to conflict with this summary, please open an
-issue — the intent is that they say the same thing.
+issue; the intent is that they say the same thing.
 
 ---
 
@@ -25,7 +25,7 @@ issue — the intent is that they say the same thing.
 
 This Contributor License Agreement ("Agreement") is between you ("You") and
 **Gnana Siva Sai V** \<gnana097@gmail.com\>, the founding maintainer of the Formsmith
-project, **including successors and assigns** — such as any legal entity later formed to
+project, **including successors and assigns**, such as any legal entity later formed to
 own the Formsmith project (the "Project Owner"). It applies to every Contribution You
 submit to Formsmith (the "Work").
 

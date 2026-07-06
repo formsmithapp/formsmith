@@ -7,4 +7,4 @@ contact_links:
     about: For usage questions, setup help, and general discussion, please open a Discussion. Issues are for confirmed bugs and concrete requests.
   - name: 🔒 Report a security vulnerability
     url: https://github.com/formsmithapp/formsmith/security/policy
-    about: Please report security issues privately per our Security Policy — do NOT open a public issue.
+    about: Please report security issues privately per our Security Policy, do NOT open a public issue.
