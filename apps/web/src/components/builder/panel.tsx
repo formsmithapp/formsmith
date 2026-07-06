@@ -310,13 +310,29 @@ function TypeSettings({ block, issues }: { block: Block; issues: Map<string, str
       )
     case 'thankyou':
       return (
-        <TextField
-          label="Redirect URL"
-          value={text('redirectUrl')}
-          placeholder="https://…"
-          error={issues.get('redirectUrl')}
-          onCommit={(v) => set('redirectUrl', v)}
-        />
+        <>
+          <TextField
+            label="Redirect URL"
+            value={text('redirectUrl')}
+            placeholder="https://…"
+            error={issues.get('redirectUrl')}
+            onCommit={(v) => set('redirectUrl', v)}
+          />
+          <TextField
+            label="Button label"
+            value={text('ctaLabel')}
+            placeholder="Visit our site"
+            error={issues.get('ctaLabel')}
+            onCommit={(v) => set('ctaLabel', v)}
+          />
+          <TextField
+            label="Button URL"
+            value={text('ctaUrl')}
+            placeholder="https://…"
+            error={issues.get('ctaUrl')}
+            onCommit={(v) => set('ctaUrl', v)}
+          />
+        </>
       )
     case 'ai_followup':
       return (

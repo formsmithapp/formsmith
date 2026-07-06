@@ -59,6 +59,30 @@ describe('createRetryQueue', () => {
     queue.dispose()
   })
 
+  it('gives up after the attempt cap and goes failed', async () => {
+    const submit = vi.fn().mockRejectedValue(new Error('down'))
+    const queue = createRetryQueue(submit)
+    queue.push(payload())
+    await vi.runAllTimersAsync()
+    expect(queue.getStatus()).toBe('failed')
+    expect(submit).toHaveBeenCalledTimes(6) // MAX_ATTEMPTS, then no more scheduling
+    queue.dispose()
+  })
+
+  it('retry() re-attempts after a terminal failure', async () => {
+    const submit = vi.fn().mockRejectedValue(new Error('down'))
+    const queue = createRetryQueue(submit)
+    queue.push(payload())
+    await vi.runAllTimersAsync()
+    expect(queue.getStatus()).toBe('failed')
+
+    submit.mockResolvedValue(undefined)
+    queue.retry()
+    await vi.runAllTimersAsync()
+    expect(queue.getStatus()).toBe('sent')
+    queue.dispose()
+  })
+
   it('stops after dispose', async () => {
     const submit = vi.fn().mockRejectedValue(new Error('down'))
     const queue = createRetryQueue(submit)

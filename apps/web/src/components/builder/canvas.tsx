@@ -361,22 +361,36 @@ export function Canvas() {
               )}
             </div>
 
-            <div className="mt-8 flex items-center gap-3">
-              <span className="rounded-[9px] bg-brand px-6 py-2.5 text-[16px] font-semibold text-on-brand shadow-sm">
-                {isScreen
-                  ? (stringProp(block, 'buttonText') ??
-                    (block.type === 'welcome' ? 'Start' : 'Continue'))
-                  : 'OK'}
-              </span>
-              {block.type !== 'thankyou' && (
+            {/* The runtime ending has no button, so the mock is hidden for
+                thankyou (the real optional CTA is authored in the panel). */}
+            {block.type !== 'thankyou' && (
+              <div className="mt-8 flex items-center gap-3">
+                <span className="rounded-[9px] bg-brand px-6 py-2.5 text-[16px] font-semibold text-on-brand shadow-sm">
+                  {isScreen
+                    ? (stringProp(block, 'buttonText') ??
+                      (block.type === 'welcome' ? 'Start' : 'Continue'))
+                    : 'OK'}
+                </span>
                 <span className="text-[12px] text-fg-2">
                   press{' '}
                   <kbd className="rounded-[5px] border border-line border-b-2 bg-surface-2 px-1.5 font-mono text-[11px]">
                     Enter ↵
                   </kbd>
                 </span>
+              </div>
+            )}
+
+            {/* Preview the optional thankyou CTA the panel authors, so the
+                canvas matches what respondents will actually see. */}
+            {block.type === 'thankyou' &&
+              stringProp(block, 'ctaLabel') &&
+              stringProp(block, 'ctaUrl') && (
+                <div className="mt-8 flex items-center gap-3">
+                  <span className="rounded-[9px] bg-brand px-6 py-2.5 text-[16px] font-semibold text-on-brand shadow-sm">
+                    {stringProp(block, 'ctaLabel')}
+                  </span>
+                </div>
               )}
-            </div>
           </div>
         </div>
       )}

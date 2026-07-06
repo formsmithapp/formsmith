@@ -69,9 +69,15 @@ export function QuestionShell({ block }: { block: Block }) {
       <h1 className={`fsr-title${isAi ? ' fsr-title-ai' : ''}`} id={labelId}>
         {piped(block.title)}
         {block.required && (
-          <span className="fsr-required" aria-hidden="true">
-            *
-          </span>
+          <>
+            <span className="fsr-required" aria-hidden="true">
+              *
+            </span>
+            {/* Announced to screen readers so required is known before submit,
+                not only after an error (covers controls whose role cannot carry
+                aria-required, e.g. the date fieldset). */}
+            <span className="fsr-visually-hidden"> (required)</span>
+          </>
         )}
       </h1>
       {block.description !== undefined && (

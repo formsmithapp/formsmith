@@ -12,6 +12,7 @@
       "!**/dist",
       "!**/.turbo",
       "!**/*.md",
+      "!**/*.svg",
       "!**/.next",
       "!**/next-env.d.ts",
       "!**/test-results",

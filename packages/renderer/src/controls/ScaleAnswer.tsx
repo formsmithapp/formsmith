@@ -37,6 +37,7 @@ export function ScaleAnswer(props: ControlProps) {
         aria-labelledby={props.labelId}
         aria-describedby={describedBy(props)}
         aria-invalid={props.invalid || undefined}
+        aria-required={block.required || undefined}
       >
         {tiles.map((n, index) => (
           <label key={n} className="fsr-tile" data-selected={value === n}>

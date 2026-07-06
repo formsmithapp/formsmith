@@ -62,6 +62,7 @@ export function DropdownAnswer(props: ControlProps) {
         aria-labelledby={props.labelId}
         aria-describedby={describedBy(props)}
         aria-invalid={props.invalid || undefined}
+        aria-required={block.required || undefined}
         placeholder={placeholderOf(block, 'Type or select an option')}
         value={query}
         autoComplete="off"

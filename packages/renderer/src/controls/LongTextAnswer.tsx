@@ -44,6 +44,7 @@ export function LongTextAnswer(props: ControlProps) {
       aria-labelledby={props.labelId}
       aria-describedby={describedBy(props)}
       aria-invalid={props.invalid || undefined}
+      aria-required={props.block.required || undefined}
       data-fsr-autofocus
     />
   )

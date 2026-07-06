@@ -33,17 +33,21 @@ export interface SubmissionPayload {
 
 export type SubmitFn = (payload: SubmissionPayload) => Promise<void> | void
 
-export type QueueStatus = 'idle' | 'sending' | 'sent' | 'retrying'
+export type QueueStatus = 'idle' | 'sending' | 'sent' | 'retrying' | 'failed'
 
 export interface RetryQueue {
   push(payload: SubmissionPayload): void
   getStatus(): QueueStatus
+  /** Manual re-attempt after 'failed': resets the attempt count and retries. */
+  retry(): void
   /** Subscribe to status changes; returns unsubscribe. */
   subscribe(listener: () => void): () => void
   dispose(): void
 }
 
 const BACKOFF_MS = [2_000, 5_000, 15_000, 30_000, 60_000]
+/** Give up automatic retries after this many failed attempts (then 'failed'). */
+const MAX_ATTEMPTS = 6
 
 export function createRetryQueue(submit: SubmitFn): RetryQueue {
   let status: QueueStatus = 'idle'
@@ -77,19 +81,31 @@ export function createRetryQueue(submit: SubmitFn): RetryQueue {
       setStatus('sent')
     } catch {
       attempt += 1
+      // Bounded automatic retry: after MAX_ATTEMPTS we stop the loop and go
+      // terminal so the respondent sees a clear failure (and a manual retry)
+      // instead of "Reconnecting…" forever.
+      if (attempt >= MAX_ATTEMPTS) {
+        setStatus('failed')
+        return
+      }
       setStatus('retrying')
       schedule()
     }
   }
 
   const onOnline = () => {
-    if (pending !== null) void attemptSend()
+    if (pending !== null && status !== 'failed') void attemptSend()
   }
   if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
 
   return {
     push(payload) {
       pending = payload
+      attempt = 0
+      void attemptSend()
+    },
+    retry() {
+      if (pending === null || status === 'sending') return
       attempt = 0
       void attemptSend()
     },

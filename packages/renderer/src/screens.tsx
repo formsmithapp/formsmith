@@ -41,17 +41,36 @@ const STATUS_LINE: Record<string, string> = {
   sending: 'Recording your response…',
   retrying: 'Reconnecting to record your response…',
   sent: 'Response recorded.',
+  failed: 'We could not save your response.',
+}
+
+/** Delivery status line + a manual retry once delivery has terminally failed. */
+export function SubmitStatus() {
+  const { status, retry } = useContext(SubmissionContext)
+  if (status === 'idle') return null
+  return (
+    <p className="fsr-submit-status" data-status={status} aria-live="polite">
+      {STATUS_LINE[status]}
+      {status === 'failed' && (
+        <button type="button" className="fsr-ok" onClick={retry}>
+          Try again
+        </button>
+      )}
+    </p>
+  )
 }
 
 /** thankyou — the ending: piped copy (scores!), submit status, per-ending redirect. */
 export function EndingView({ block }: { block: Block }) {
   const engine = useEngine()
   const options = useContext(OptionsContext)
-  const submission = useContext(SubmissionContext)
   const piped = (text: string) => engine.pipe(text, { escape: false })
 
   const redirectUrl =
     typeof block.properties?.redirectUrl === 'string' ? block.properties.redirectUrl : undefined
+  const ctaLabel =
+    typeof block.properties?.ctaLabel === 'string' ? block.properties.ctaLabel : undefined
+  const ctaUrl = typeof block.properties?.ctaUrl === 'string' ? block.properties.ctaUrl : undefined
 
   useEffect(() => {
     if (redirectUrl === undefined) return
@@ -64,12 +83,15 @@ export function EndingView({ block }: { block: Block }) {
       <span className="fsr-badge">{BADGE.thankyou}</span>
       <h1 className="fsr-title">{piped(block.title)}</h1>
       {block.description !== undefined && <p className="fsr-desc">{piped(block.description)}</p>}
-      {submission !== 'idle' && (
-        <p className="fsr-submit-status" data-status={submission} aria-live="polite">
-          {STATUS_LINE[submission]}
-        </p>
-      )}
+      <SubmitStatus />
       {redirectUrl !== undefined && <p className="fsr-submit-status">Redirecting…</p>}
+      {ctaLabel !== undefined && ctaUrl !== undefined && (
+        <div className="fsr-okrow">
+          <a className="fsr-ok" href={ctaUrl} target="_blank" rel="noopener noreferrer">
+            {ctaLabel}
+          </a>
+        </div>
+      )}
     </div>
   )
 }

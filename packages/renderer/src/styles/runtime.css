@@ -522,6 +522,15 @@
 .fsr-submit-status[data-status="sent"] {
   color: var(--success);
 }
+.fsr-submit-status[data-status="failed"] {
+  color: var(--error);
+}
+.fsr-submit-status[data-status="failed"] .fsr-ok {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  padding: 8px 18px;
+}
 
 /* ---- author logo (ThemeConfig.logoUrl) ---- */
 .fsr-logo {

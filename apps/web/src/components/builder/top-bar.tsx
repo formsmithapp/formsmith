@@ -113,7 +113,7 @@ export function TopBar({
       <button
         type="button"
         onClick={publish}
-        className="rounded-[9px] bg-accent px-4 py-1.5 text-[13px] font-semibold text-white shadow-sm transition-transform duration-100 ease-spring hover:bg-accent-strong active:scale-95 dark:text-ink"
+        className="rounded-[9px] bg-accent px-4 py-1.5 text-[13px] font-semibold text-ink shadow-sm transition-transform duration-100 ease-spring hover:bg-accent-strong active:scale-95"
       >
         Publish
       </button>

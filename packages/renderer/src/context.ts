@@ -24,8 +24,17 @@ export const OptionsContext = createContext<RuntimeOptions>({
   },
 })
 
-/** Delivery status of the completed response, for the ending screen. */
-export const SubmissionContext = createContext<QueueStatus>('idle')
+/** Delivery state of the completed response, for the ending screen. */
+export interface SubmissionState {
+  status: QueueStatus
+  /** Manual re-attempt, surfaced when delivery has terminally failed. */
+  retry: () => void
+}
+
+export const SubmissionContext = createContext<SubmissionState>({
+  status: 'idle',
+  retry: () => {},
+})
 
 export function useEngine(): FormEngine {
   const engine = useContext(EngineContext)

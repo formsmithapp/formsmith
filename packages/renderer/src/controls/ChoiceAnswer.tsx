@@ -39,6 +39,7 @@ export function ChoiceAnswer(props: ControlProps) {
       aria-labelledby={props.labelId}
       aria-describedby={describedBy(props)}
       aria-invalid={props.invalid || undefined}
+      aria-required={block.required || undefined}
     >
       {choices.map((choice, index) => {
         const letter = letterFor(index)

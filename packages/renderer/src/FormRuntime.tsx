@@ -212,10 +212,13 @@ export function FormRuntime(props: FormRuntimeProps) {
   // The queue is created INSIDE the effect so StrictMode's double-invoke
   // (mount → cleanup → mount) gets a fresh queue instead of a disposed one.
   const [queueStatus, setQueueStatus] = useState<QueueStatus>('idle')
+  const retryRef = useRef<(() => void) | null>(null)
+  const retry = useCallback(() => retryRef.current?.(), [])
   const onSubmit = props.onSubmit
   useEffect(() => {
     if (onSubmit === undefined) return
     const queue = createRetryQueue(onSubmit)
+    retryRef.current = queue.retry
     const offStatus = queue.subscribe(() => setQueueStatus(queue.getStatus()))
     const offComplete = engine.on('complete', ({ answers, variables }) => {
       const snapshot = engine.serialize()
@@ -234,8 +237,10 @@ export function FormRuntime(props: FormRuntimeProps) {
       offComplete()
       offStatus()
       queue.dispose()
+      retryRef.current = null
     }
   }, [engine, onSubmit])
+  const submissionState = useMemo(() => ({ status: queueStatus, retry }), [queueStatus, retry])
 
   // data-theme always wins; "auto" follows the system live.
   const [systemDark, setSystemDark] = useState(
@@ -325,7 +330,7 @@ export function FormRuntime(props: FormRuntimeProps) {
   return (
     <EngineContext.Provider value={runtimeEngine}>
       <OptionsContext.Provider value={options}>
-        <SubmissionContext.Provider value={queueStatus}>
+        <SubmissionContext.Provider value={submissionState}>
           <div
             className="fsr-root"
             data-theme={resolvedTheme}

@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import { ReferenceClient } from './reference-client'
 
 export const metadata: Metadata = {
-  title: 'API Reference — Formsmith',
+  title: 'API reference · Formsmith',
   description: 'The Formsmith data-plane REST API reference.',
 }
 

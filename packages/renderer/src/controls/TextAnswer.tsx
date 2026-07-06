@@ -35,6 +35,7 @@ export function TextAnswer(props: ControlProps) {
       aria-labelledby={props.labelId}
       aria-describedby={describedBy(props)}
       aria-invalid={props.invalid || undefined}
+      aria-required={props.block.required || undefined}
       autoComplete="off"
       data-fsr-autofocus
     />

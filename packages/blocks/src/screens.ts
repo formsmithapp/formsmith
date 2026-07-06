@@ -24,6 +24,18 @@ const thankyouProperties = z.strictObject({
       message: 'redirect must be an http(s) URL',
     })
     .optional(),
+  /**
+   * Optional call-to-action on the ending. Both must be set for the button to
+   * render. The url is http(s)-only for the same injection reason as the
+   * redirect above (`javascript:` parses as a URL).
+   */
+  ctaLabel: z.string().min(1).max(100).optional(),
+  ctaUrl: z
+    .url()
+    .refine((url) => url.startsWith('https://') || url.startsWith('http://'), {
+      message: 'button URL must be an http(s) URL',
+    })
+    .optional(),
 })
 
 export type WelcomeProperties = z.infer<typeof welcomeProperties>

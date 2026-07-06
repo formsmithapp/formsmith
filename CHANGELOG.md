@@ -14,6 +14,35 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.1], 2026-07-06
+
+A round of UI/UX polish and accessibility fixes on top of the first release.
+
+### Added
+
+- Optional call-to-action button on the thank-you screen (author-set label and URL), so an
+  ending can point respondents somewhere instead of dead-ending.
+- Branded 404 and error pages, plus a proper touch icon, web app manifest, and browser
+  theme color.
+- Per-page browser tab titles across sign-in, sign-up, the dashboard, and the builder tabs.
+
+### Changed
+
+- The builder canvas no longer shows a phantom continue button on the thank-you screen; it
+  now matches the button-free runtime ending.
+
+### Fixed
+
+- Shared-link and per-form preview images now resolve to the instance's public URL instead
+  of localhost (missing `metadataBase`).
+- Replaced the stock framework favicon with the Formsmith brand mark.
+- Failed submissions now stop retrying after a bounded number of attempts and show a clear
+  failure with a manual retry, instead of claiming to reconnect forever and risking lost
+  data. The ending fallback reflects real delivery status too.
+- Publish button text now uses dark ink on the amber accent for a readable contrast ratio.
+- Required questions now expose `aria-required` on their controls, so screen-reader users
+  learn a field is required before submitting.
+
 ## [0.1.0], 2026-07-06
 
 The first public release. The whole product runs on two containers
@@ -57,5 +86,6 @@ The first public release. The whole product runs on two containers
   submit path fast under load.
 - **No telemetry or analytics of any kind**, a self-hosted instance never phones home.
 
-[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/formsmithapp/formsmith/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/formsmithapp/formsmith/releases/tag/v0.1.0
