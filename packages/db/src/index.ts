@@ -4,7 +4,8 @@
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { forms, responses } from './schema'
 
-export { createDb, type Database } from './client'
+export { createDb, type Database, ping } from './client'
+export { type MigrateOptions, runMigrations } from './migrate'
 export {
   type ApiKeyRow,
   type ApiKeysDbRepository,

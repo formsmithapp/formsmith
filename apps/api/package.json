@@ -1,7 +1,7 @@
 {
   "name": "@formsmithapp/api",
   "version": "0.0.0",
-  "description": "Formsmith data-plane API (Hono) — mountable into the unified web build today, standalone-deployable (Node/Workers) tomorrow.",
+  "description": "Formsmith data-plane API (Hono) \u2014 mountable into the unified web build today, standalone-deployable (Node/Workers) tomorrow.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "sideEffects": false,
@@ -39,7 +39,8 @@
     "@hono/zod-openapi": "^1.4.0",
     "@hono/zod-validator": "^0.8.0",
     "hono": "^4.12.27",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "undici": "^7.16.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",

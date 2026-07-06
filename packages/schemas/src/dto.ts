@@ -36,6 +36,9 @@ export const submissionInput = z.strictObject({
   hiddenFields: z.record(z.string().max(200), z.string().max(1_000)).optional(),
   /** AI follow-up exchanges — every sig is verified server-side. */
   aiExchanges: z.array(aiExchange).max(10).optional(),
+  /** Honeypot — humans never see the field; non-empty means a bot filled it
+   * (the server accepts-and-discards, indistinguishable from success). */
+  _hp: z.string().max(500).optional(),
 })
 
 /** `POST /f/:id/ai` — request the next follow-up in an exchange. */

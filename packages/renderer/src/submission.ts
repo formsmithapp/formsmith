@@ -26,6 +26,9 @@ export interface SubmissionPayload {
   hiddenFields: Record<string, string>
   /** Present when ai_followup exchanges happened — verified server-side. */
   aiExchanges?: AiExchangeEntry[]
+  /** Honeypot value — humans never see the field; set only when a bot
+   * filled it (the server accepts-and-discards). */
+  _hp?: string
 }
 
 export type SubmitFn = (payload: SubmissionPayload) => Promise<void> | void

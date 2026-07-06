@@ -531,3 +531,60 @@ describe('S4: form generation', () => {
     expect(meta.aiConfigured).toBe(true)
   })
 })
+
+describe('S5: hardening', () => {
+  it('honeypot submissions get a success-shaped 201 but store NOTHING', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    currentUser = null // a bot filled the hidden field
+    const res = await app.request(
+      `/api/v1/f/${id}/responses`,
+      json({ answers: { plan: 'pro' }, _hp: 'https://spam.example' }),
+    )
+    expect(res.status).toBe(201) // indistinguishable from success
+    const body = (await res.json()) as { id: string; formVersion: number }
+    expect(body.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(body.formVersion).toBe(1)
+
+    currentUser = 'alice'
+    const list = (await (await app.request(`/api/v1/forms/${id}/responses`)).json()) as {
+      responses: unknown[]
+    }
+    expect(list.responses).toEqual([]) // discarded
+
+    // even INVALID answers get the same 201 — no validation oracle for bots
+    currentUser = null
+    const invalid = await app.request(`/api/v1/f/${id}/responses`, json({ answers: {}, _hp: 'x' }))
+    expect(invalid.status).toBe(201)
+  })
+
+  it('the submit endpoint rate-limits per ip+form (FORMSMITH_SUBMIT_RATE)', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    const limited = createApi({
+      db,
+      getSession: async () => null,
+      submitRatePerMinute: 2,
+    })
+    const submit = () =>
+      limited.request(`/api/v1/f/${id}/responses`, json({ answers: { plan: 'pro' } }))
+    expect((await submit()).status).toBe(201)
+    expect((await submit()).status).toBe(201)
+    expect((await submit()).status).toBe(429)
+  })
+
+  it('oversize public bodies die at the door (413), not in JSON.parse', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+
+    currentUser = null
+    const res = await app.request(`/api/v1/f/${id}/responses`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: `{"answers":{"plan":"${'x'.repeat(1_100_000)}"}}`,
+    })
+    expect(res.status).toBe(413)
+  })
+})

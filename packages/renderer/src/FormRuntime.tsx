@@ -110,6 +110,7 @@ export function FormRuntime(props: FormRuntimeProps) {
   const aiSessionRef = useRef<AiSession | null>(null)
   aiSessionRef.current = aiSession
   const aiExchangesRef = useRef<AiExchangeEntry[]>([])
+  const hpRef = useRef<HTMLInputElement>(null)
   const aiDoneRef = useRef<Set<string>>(new Set())
   const aiSubmitRef = useRef<(() => void) | null>(null)
 
@@ -218,6 +219,7 @@ export function FormRuntime(props: FormRuntimeProps) {
     const offStatus = queue.subscribe(() => setQueueStatus(queue.getStatus()))
     const offComplete = engine.on('complete', ({ answers, variables }) => {
       const snapshot = engine.serialize()
+      const hpValue = hpRef.current?.value ?? ''
       queue.push({
         formId: snapshot.formId,
         formVersion: snapshot.formVersion,
@@ -225,6 +227,7 @@ export function FormRuntime(props: FormRuntimeProps) {
         variables,
         hiddenFields: engine.getState().hidden,
         aiExchanges: aiExchangesRef.current.length > 0 ? [...aiExchangesRef.current] : undefined,
+        _hp: hpValue === '' ? undefined : hpValue,
       })
     })
     return () => {
@@ -329,6 +332,16 @@ export function FormRuntime(props: FormRuntimeProps) {
             style={props.themeVars as CSSProperties | undefined}
             ref={rootRef}
           >
+            {/* honeypot: visually hidden, tab-skipped — humans never touch it */}
+            <input
+              ref={hpRef}
+              className="fsr-hp"
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+            />
             {props.logoUrl !== undefined && <img className="fsr-logo" src={props.logoUrl} alt="" />}
             {showProgress && (
               <div

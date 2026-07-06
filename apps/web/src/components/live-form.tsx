@@ -16,7 +16,14 @@ import { useFormTheming } from './use-theme'
  * submits through the retry queue to the public endpoint (where the server
  * re-evaluates against the pinned snapshot).
  */
-export function LiveForm({ form }: { form: FormDefinition | null }) {
+export function LiveForm({
+  form,
+  branding = true,
+}: {
+  form: FormDefinition | null
+  /** "Powered by Formsmith" badge — FORMSMITH_HIDE_BADGE turns it off. */
+  branding?: boolean
+}) {
   // the runtime is interactive-only: SSR (and the first client paint) render
   // a stable shell so hydration matches; the engine reads location.search
   // for hidden fields, which only exists client-side
@@ -45,6 +52,7 @@ export function LiveForm({ form }: { form: FormDefinition | null }) {
       variables: Record<string, unknown>
       hiddenFields: Record<string, string>
       aiExchanges?: import('@formsmithapp/renderer').AiExchangeEntry[]
+      _hp?: string
     }) => {
       await getResponsesRepository().add(payload)
     },
@@ -124,6 +132,7 @@ export function LiveForm({ form }: { form: FormDefinition | null }) {
         theme={theming?.appearance ?? 'auto'}
         themeVars={theming?.vars}
         logoUrl={logoUrl}
+        branding={branding}
       />
     </div>
   )

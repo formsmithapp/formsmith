@@ -6,7 +6,7 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 import { getDb } from './db'
-import { serverEnv } from './env'
+import { envFlag, serverEnv } from './env'
 
 /**
  * Better Auth — a LIBRARY running in-process against our Postgres; no
@@ -20,20 +20,41 @@ import { serverEnv } from './env'
 
 function buildAuth() {
   const env = serverEnv()
+  const signupDisabled = envFlag(env.FORMSMITH_DISABLE_SIGNUP)
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(getDb(), { provider: 'pg', schema }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: { enabled: true, disableSignUp: signupDisabled, minPasswordLength: 10 },
+    // brute-force protection on the auth surface (S5 hardening); in-memory
+    // storage matches the single-instance v1 deployment
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 100,
+      customRules: {
+        '/sign-in/email': { window: 60, max: 10 },
+        '/sign-up/email': { window: 60, max: 10 },
+        '/forget-password': { window: 60, max: 5 },
+      },
+    },
     socialProviders: {
       ...(env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined
         ? {
-            google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET },
+            google: {
+              clientId: env.GOOGLE_CLIENT_ID,
+              clientSecret: env.GOOGLE_CLIENT_SECRET,
+              disableSignUp: signupDisabled,
+            },
           }
         : {}),
       ...(env.GITHUB_CLIENT_ID !== undefined && env.GITHUB_CLIENT_SECRET !== undefined
         ? {
-            github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET },
+            github: {
+              clientId: env.GITHUB_CLIENT_ID,
+              clientSecret: env.GITHUB_CLIENT_SECRET,
+              disableSignUp: signupDisabled,
+            },
           }
         : {}),
     },
@@ -64,4 +85,9 @@ export function enabledSocialProviders(): { google: boolean; github: boolean } {
     google: env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined,
     github: env.GITHUB_CLIENT_ID !== undefined && env.GITHUB_CLIENT_SECRET !== undefined,
   }
+}
+
+/** FORMSMITH_DISABLE_SIGNUP — instance owners can close registration. */
+export function signupDisabled(): boolean {
+  return envFlag(serverEnv().FORMSMITH_DISABLE_SIGNUP)
 }

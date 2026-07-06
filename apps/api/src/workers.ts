@@ -4,6 +4,8 @@
 import type { MailAdapter, QueueAdapter } from '@formsmithapp/adapters'
 import { type Database, schema, webhooksRepository } from '@formsmithapp/db'
 import { and, eq } from 'drizzle-orm'
+import { fetch as undiciFetch } from 'undici'
+import { createEgressGuard } from './egress'
 import { signWebhookPayload } from './signature'
 
 /**
@@ -19,6 +21,9 @@ export interface WorkerDeps {
   mail: MailAdapter
   /** Absolute origin for links in notification emails. */
   baseUrl: string
+  /** WEBHOOK_ALLOW_PRIVATE — lets deliveries reach private/loopback targets
+   * (n8n on the same box). Default false: safe on the open internet. */
+  allowPrivateEgress?: boolean
 }
 
 export interface DeliverJob {
@@ -39,6 +44,7 @@ export const WEBHOOK_RETRY = { retryLimit: 5, retryBackoff: true, retryDelaySeco
 export async function startWorkers(deps: WorkerDeps): Promise<void> {
   const { db, queue, mail, baseUrl } = deps
   const webhooks = webhooksRepository(db)
+  const egress = createEgressGuard(deps.allowPrivateEgress ?? false)
 
   await queue.work('webhook.deliver', async (raw, meta) => {
     const job = raw as DeliverJob
@@ -86,22 +92,35 @@ export async function startWorkers(deps: WorkerDeps): Promise<void> {
     const started = Date.now()
     let status: number | null = null
     let error: string | null = null
-    try {
-      const res = await fetch(hook.url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-formsmith-event': job.event,
-          'x-formsmith-webhook-id': hook.id,
-          'x-formsmith-signature': signature,
-        },
-        body,
-        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
-      })
-      status = res.status
-      if (!res.ok) error = `HTTP ${res.status}`
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'request failed'
+    // literal-IP/localhost targets never hit DNS, so the connect-time guard
+    // can't see them — fail those before dialing
+    if (egress.urlBlocked(hook.url)) {
+      error = 'webhook egress blocked: private address (set WEBHOOK_ALLOW_PRIVATE=true to allow)'
+    } else {
+      try {
+        const res = await undiciFetch(hook.url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-formsmith-event': job.event,
+            'x-formsmith-webhook-id': hook.id,
+            'x-formsmith-signature': signature,
+          },
+          body,
+          signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+          dispatcher: egress.dispatcher,
+          // following a redirect would re-open the SSRF hole past the guard
+          redirect: 'manual',
+        })
+        status = res.status
+        if (res.status >= 300 && res.status < 400) {
+          error = `HTTP ${res.status} (redirects are not followed)`
+        } else if (!res.ok) {
+          error = `HTTP ${res.status}`
+        }
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : 'request failed'
+      }
     }
     await webhooks.recordAttempt(hook.id, {
       event: job.event,

@@ -523,8 +523,6 @@
   color: var(--success);
 }
 
-/* ---- reduced motion ----
-   Keep this block LAST: it wins by source order at equal specificity. */
 /* ---- author logo (ThemeConfig.logoUrl) ---- */
 .fsr-logo {
   position: absolute;
@@ -536,6 +534,21 @@
   object-fit: contain;
 }
 
+/* ---- honeypot ----
+   Visually hidden but real in the DOM (bots fill it; humans can't reach it —
+   tab-skipped, hidden from AT). Deliberately NOT display:none. */
+.fsr-hp {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- reduced motion ----
+   Keep this block LAST: it wins by source order at equal specificity. */
 @media (prefers-reduced-motion: reduce) {
   .fsr-root *,
   .fsr-root *::before,

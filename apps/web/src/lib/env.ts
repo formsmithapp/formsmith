@@ -36,7 +36,19 @@ const envSchema = z.object({
   FORMSMITH_AI_TIMEOUT_MS: z.string().optional(),
   /** 'mock' enables the deterministic dev/test provider. */
   FORMSMITH_AI: z.enum(['mock']).optional(),
+  /** Self-host toggles — truthy values: 'true' | '1'. */
+  FORMSMITH_HIDE_BADGE: z.string().optional(),
+  FORMSMITH_DISABLE_SIGNUP: z.string().optional(),
+  /** Lets webhook deliveries reach private/loopback addresses (e.g. n8n on the same box). */
+  WEBHOOK_ALLOW_PRIVATE: z.string().optional(),
+  /** Public submit endpoint rate limit per ip+form, per minute. Default 60. */
+  FORMSMITH_SUBMIT_RATE: z.coerce.number().int().positive().optional(),
 })
+
+/** Shared truthiness rule for the self-host env toggles. */
+export function envFlag(value: string | undefined): boolean {
+  return value === 'true' || value === '1'
+}
 
 export type ServerEnv = z.infer<typeof envSchema>
 

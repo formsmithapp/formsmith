@@ -24,6 +24,8 @@ export interface ResponsePayload {
   hiddenFields?: Record<string, string>
   /** Signed AI exchange tuples from the runtime — the server verifies each sig. */
   aiExchanges?: AiExchangePayload[]
+  /** Honeypot — forwarded verbatim; the server accepts-and-discards when set. */
+  _hp?: string
 }
 
 /** The wire shape of one signed exchange (issued by POST /f/:id/ai). */

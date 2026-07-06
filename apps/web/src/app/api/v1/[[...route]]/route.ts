@@ -26,6 +26,7 @@ function getHandler() {
       mail: getMail(),
       ai: provider === null ? undefined : { provider },
       signingSecret: serverEnv().BETTER_AUTH_SECRET,
+      submitRatePerMinute: serverEnv().FORMSMITH_SUBMIT_RATE,
     })
     handler = handle(api)
   }

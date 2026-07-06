@@ -42,14 +42,17 @@ and developers who want to own their stack.
 
 ## Self-hosting
 
-At first release, running a real instance will be:
-
 ```bash
 git clone https://github.com/formsmithapp/formsmith
 cd formsmith
-cp .env.example .env      # set a few secrets
-docker compose up         # web + postgres — that's it
+cp .env.example .env      # set BETTER_AUTH_SECRET (openssl rand -base64 32)
+docker compose up -d      # web + postgres — that's it
 ```
+
+Open `http://localhost:3000`, sign up, publish your first form. Migrations run on boot;
+upgrades are `docker compose pull && docker compose up -d`. The full walkthrough — TLS,
+configuration reference, backups, security defaults — is in
+**[docs/self-hosting.md](docs/self-hosting.md)**.
 
 No Redis, no object storage, and no cloud dependency required to run Formsmith. Optional capabilities
 (such as file uploads) light up via an optional storage profile or by pointing an S3-compatible bucket

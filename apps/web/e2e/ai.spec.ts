@@ -9,9 +9,13 @@ import { expect, test } from '@playwright/test'
  * visible error (v1 §12 #2, rehearsed); the trace lands in Results.
  */
 
-/** Click the visible answer control, then fill it — typing before focus lands falls on <body>. */
+/** Click the visible answer control, then fill it — typing before focus lands
+ * falls on <body>. Excludes the honeypot: opacity:0 still counts as :visible
+ * to Playwright, and filling the bait field discards the submission. */
 async function typeAnswer(page: import('@playwright/test').Page, text: string) {
-  const control = page.locator('.fsr-root input:visible, .fsr-root textarea:visible').first()
+  const control = page
+    .locator('.fsr-root input:visible:not(.fsr-hp), .fsr-root textarea:visible')
+    .first()
   await control.click()
   await control.fill(text)
   await page.keyboard.press('Enter')

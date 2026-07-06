@@ -1,0 +1,50 @@
+# Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Formsmith self-host — the whole product is two containers.
+# Quickstart (full guide: docs/self-hosting.md):
+#   1. cp .env.example .env
+#   2. set BETTER_AUTH_SECRET (openssl rand -base64 32)
+#   3. docker compose up -d
+# TLS/domain is your reverse proxy's job (Caddy example in the guide).
+
+name: formsmith
+
+services:
+  web:
+    image: ghcr.io/formsmithapp/formsmith:latest
+    # Building from source instead? Comment `image:` and uncomment:
+    # build: .
+    ports:
+      - '${FORMSMITH_PORT:-3000}:3000'
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://formsmith:${POSTGRES_PASSWORD:-formsmith}@postgres:5432/formsmith}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env — generate one with `openssl rand -base64 32`}
+      BETTER_AUTH_URL: ${FORMSMITH_URL:-http://localhost:3000}
+    # everything optional (SMTP, AI keys, OAuth, self-host toggles) flows
+    # from .env — unset variables stay unset, so features degrade cleanly
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: formsmith
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-formsmith}
+      POSTGRES_DB: formsmith
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U formsmith -d formsmith']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

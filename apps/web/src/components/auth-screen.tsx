@@ -25,9 +25,12 @@ const inputClass =
 export function AuthScreen({
   mode,
   providers,
+  signupDisabled = false,
 }: {
   mode: 'signin' | 'signup'
   providers: SocialProviders
+  /** FORMSMITH_DISABLE_SIGNUP — registration is closed on this instance. */
+  signupDisabled?: boolean
 }) {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -37,6 +40,37 @@ export function AuthScreen({
   const [busy, setBusy] = useState(false)
   const signup = mode === 'signup'
   const anySocial = providers.google || providers.github
+
+  if (signup && signupDisabled) {
+    return (
+      <div className="relative grid h-dvh place-items-center bg-canvas px-6">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 [background:var(--canvas-vignette)]"
+        />
+        <div className="relative w-full max-w-sm">
+          <div className="flex justify-center">
+            <BrandMark />
+          </div>
+          <div className="mt-6 rounded-[16px] border border-line bg-surface-2 p-6 text-center shadow-md">
+            <h1 className="font-serif text-[24px] font-semibold tracking-[-0.012em]">
+              Sign-ups are closed
+            </h1>
+            <p className="mt-2.5 text-[13.5px] leading-relaxed text-fg-2">
+              The owner of this Formsmith instance has disabled new registrations. If you were
+              expecting access, ask them for an account.
+            </p>
+            <Link
+              href="/signin"
+              className="mt-5 inline-block rounded-[9px] bg-brand px-4 py-2.5 text-[14px] font-semibold text-on-brand shadow-sm hover:bg-brand-strong"
+            >
+              Sign in instead
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -161,12 +195,14 @@ export function AuthScreen({
           )}
         </div>
 
-        <p className="mt-4 text-center text-[13px] text-fg-2">
-          {signup ? 'Already have an account? ' : 'New to Formsmith? '}
-          <Link href={signup ? '/signin' : '/signup'} className="font-semibold text-brand">
-            {signup ? 'Sign in' : 'Create an account'}
-          </Link>
-        </p>
+        {(signup || !signupDisabled) && (
+          <p className="mt-4 text-center text-[13px] text-fg-2">
+            {signup ? 'Already have an account? ' : 'New to Formsmith? '}
+            <Link href={signup ? '/signin' : '/signup'} className="font-semibold text-brand">
+              {signup ? 'Sign in' : 'Create an account'}
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   )

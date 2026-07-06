@@ -18,5 +18,20 @@ const ApiReferenceReact = dynamic(
 )
 
 export function ReferenceClient() {
-  return <ApiReferenceReact configuration={{ url: '/api/v1/openapi.json' }} />
+  return (
+    <ApiReferenceReact
+      configuration={{
+        url: '/api/v1/openapi.json',
+        // Scalar's "Ask AI Agent", "Generate MCP", and "Open API Client" route out to
+        // Scalar's cloud/desktop (an Agent key / api.scalar.com / the Scalar client) —
+        // disabled so this page stays fully same-origin with zero third-party egress,
+        // consistent with the self-host / privacy stance. A native, self-hostable MCP
+        // server + BYO-key API assistant are planned post-launch instead. "Try It"
+        // still works — it runs same-origin against our own API.
+        agent: { disabled: true },
+        mcp: { disabled: true },
+        hideClientButton: true,
+      }}
+    />
+  )
 }

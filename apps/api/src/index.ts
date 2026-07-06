@@ -25,6 +25,7 @@ import {
 } from '@formsmithapp/schemas'
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, eq } from 'drizzle-orm'
+import { bodyLimit } from 'hono/body-limit'
 import { createMiddleware } from 'hono/factory'
 import { type ExchangeTuple, signExchange, verifyExchange } from './ai-sign'
 import { generateApiKey, generateWebhookSecret, hashApiKey } from './keys'
@@ -51,6 +52,9 @@ export interface ApiDeps {
   /** Signs AI exchanges (incl. the fallback path, which works with AI off).
    * Absent → no exchange loop at all (base questions only). */
   signingSecret?: string
+  /** Public submit limit per ip+form per minute (FORMSMITH_SUBMIT_RATE).
+   * Default 60 — raise it when many respondents share one NAT'd IP. */
+  submitRatePerMinute?: number
 }
 
 interface Env {
@@ -143,6 +147,14 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   const todayUtc = () => new Date().toISOString().slice(0, 10)
 
+  // S5 hardening: every surface has a DECIDED ceiling (in-memory sliding
+  // windows — single-instance v1; a CacheAdapter backend is hosted-scale work)
+  const keyLimiter = createRateLimiter({ windowMs: 60_000, max: 600 })
+  const submitLimiter = createRateLimiter({
+    windowMs: 60_000,
+    max: deps.submitRatePerMinute ?? 60,
+  })
+
   /** Session first, then `Authorization: Bearer fsk_…` — the public REST API. */
   const requireWorkspace = createMiddleware<Env>(async (c, next) => {
     const session = await deps.getSession(c.req.raw.headers)
@@ -157,6 +169,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     if (header?.startsWith('Bearer fsk_') === true) {
       const key = await apiKeys.findByHash(hashApiKey(header.slice('Bearer '.length)))
       if (key !== null) {
+        // generous ceiling per key — protects a self-hoster's box from a
+        // runaway script without ever biting a legitimate export
+        if (!keyLimiter.allow(key.id)) return c.json({ error: 'rate limited' }, 429)
         c.set('workspaceId', key.workspaceId)
         c.set('authVia', 'key')
         // metrics/telemetry must never fail a request
@@ -240,6 +255,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     aiTrace: unknown[] | null
   }) => ({ ...row, submittedAt: row.submittedAt.toISOString() })
 
+  const clientIp = (headers: Headers) =>
+    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
+
   const app = new OpenAPIHono<Env>().basePath(basePath)
 
   // NOTE: in Hono, `/x/*` also matches `/x` — register each surface ONCE,
@@ -248,6 +266,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   app.use('/import', requireWorkspace)
   app.use('/meta', requireWorkspace)
   app.use('/api-keys/*', requireSession)
+  // zod already bounds every field — this stops the 100 MB nonsense before
+  // JSON.parse on the unauthenticated surface
+  app.use('/f/*', bodyLimit({ maxSize: 1_048_576 }))
 
   /* ---------- public: serve & submit ---------- */
 
@@ -284,14 +305,38 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         201: jsonResponse(responseRowDto, 'The stored response (variables recomputed)'),
         404: jsonResponse(errorDto, 'Unknown or unpublished form'),
         422: jsonResponse(errorDto, 'Rejected by server-side re-evaluation'),
+        429: jsonResponse(errorDto, 'Rate limited'),
       },
     }),
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      if (!submitLimiter.allow(`${clientIp(c.req.raw.headers)}:${id}`)) {
+        return c.json({ error: 'rate limited' }, 429)
+      }
       const payload = c.req.valid('json')
       const snapshot = await snapshotForSubmit(id, payload.formVersion)
       if (snapshot === null) return c.json(NOT_FOUND, 404)
+
+      // honeypot tripped → accept-and-discard: a 201 indistinguishable from
+      // success, nothing stored — silence is the anti-spam
+      if (payload._hp !== undefined && payload._hp !== '') {
+        console.warn(`[submit] honeypot tripped for form ${id}`)
+        return c.json(
+          responseJson({
+            id: crypto.randomUUID(),
+            formId: id,
+            formVersion: snapshot.version,
+            submittedAt: new Date(),
+            answers: payload.answers,
+            variables: {},
+            hidden: payload.hiddenFields ?? {},
+            ending: null,
+            aiTrace: null,
+          }),
+          201,
+        )
+      }
 
       const outcome = evaluate(snapshot.doc, payload)
       if (!outcome.ok) return c.json({ error: 'rejected', issues: outcome.issues }, 422)
@@ -339,7 +384,15 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       // integrations are queued post-commit and must never fail the submission
       if (deps.queue !== undefined) {
         try {
-          const hooks = await webhooks.listActiveByForm(id)
+          // independent lookups — one round trip of latency, not two
+          const [hooks, [formRow]] = await Promise.all([
+            webhooks.listActiveByForm(id),
+            deps.db
+              .select({ doc: schema.forms.doc })
+              .from(schema.forms)
+              .where(eq(schema.forms.id, id))
+              .limit(1),
+          ])
           for (const hook of hooks) {
             await deps.queue.send(
               'webhook.deliver',
@@ -347,11 +400,6 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
               WEBHOOK_RETRY,
             )
           }
-          const [formRow] = await deps.db
-            .select({ doc: schema.forms.doc })
-            .from(schema.forms)
-            .where(eq(schema.forms.id, id))
-            .limit(1)
           const settings = formRow?.doc.settings as { notifyOnSubmit?: boolean } | undefined
           if (settings?.notifyOnSubmit === true) {
             await deps.queue.send('email.notify', { formId: id, responseId: row.id })
@@ -368,8 +416,6 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
 
   // in-slice guard: this endpoint spends the operator's LLM budget
   const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 30 })
-  const clientIp = (headers: Headers) =>
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
 
   app.openapi(
     createRoute({

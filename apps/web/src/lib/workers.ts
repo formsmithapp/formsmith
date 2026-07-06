@@ -10,7 +10,7 @@ import {
 } from '@formsmithapp/adapters'
 import { startWorkers } from '@formsmithapp/api'
 import { getDb } from './db'
-import { serverEnv } from './env'
+import { envFlag, serverEnv } from './env'
 
 /**
  * Queue/mail singletons + worker bootstrap for the unified build. Cached on
@@ -49,6 +49,7 @@ export async function startAppWorkers(): Promise<void> {
     queue: getQueue(),
     mail: getMail(),
     baseUrl: serverEnv().BETTER_AUTH_URL,
+    allowPrivateEgress: envFlag(serverEnv().WEBHOOK_ALLOW_PRIVATE),
   })
   console.log('[workers] webhook/notification workers started')
 }
