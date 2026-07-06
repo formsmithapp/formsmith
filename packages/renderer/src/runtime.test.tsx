@@ -424,3 +424,62 @@ it('renders a block description as fsr-desc and links the control via aria-descr
   const describedBy = control?.getAttribute('aria-describedby')?.split(' ') ?? []
   expect(describedBy).toContain('fsr-d-b_desc')
 })
+
+it('does NOT auto-advance when arrow keys browse a single-select (WCAG 3.2.2)', async () => {
+  const form: FormDefinition = {
+    id: 'r_arrow',
+    version: 1,
+    blocks: [
+      { id: 'b_welcome', ref: 'intro', type: 'welcome', title: 'Hi' },
+      {
+        id: 'b_pick',
+        ref: 'pick',
+        type: 'multiple_choice',
+        title: 'Pick one',
+        required: true,
+        properties: {
+          choices: [
+            { id: 'a', label: 'Apple' },
+            { id: 'b', label: 'Banana' },
+            { id: 'c', label: 'Cherry' },
+          ],
+        },
+      },
+      { id: 'b_end', ref: 'end', type: 'thankyou', title: 'Done' },
+    ],
+  }
+  const { engine, host } = mountForm(form)
+  await settled(host, 'Hi')
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'Pick one')
+
+  // Arrow navigation records a selection but must NOT navigate onward, even
+  // after the auto-advance debounce window would have elapsed.
+  await userEvent.keyboard('{ArrowDown}')
+  await vi.waitFor(() => expect(engine.getState().answers.pick).not.toBeUndefined())
+  await new Promise((resolve) => setTimeout(resolve, 320))
+  expect(engine.getState().currentId).toBe('b_pick')
+
+  // An explicit commit (Enter) still advances.
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'Done')
+})
+
+it('moves focus to the ending heading on completion (not lost to body)', async () => {
+  const onSubmit = vi.fn().mockResolvedValue(undefined)
+  const { host } = mountForm(linearForm(), { onSubmit })
+  await settled(host, 'Hi there!')
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'What is your name?')
+  await userEvent.keyboard('Ada{Enter}')
+  await settled(host, 'And your email')
+  await userEvent.keyboard('ada@lovelace.dev{Enter}')
+  await settled(host, 'Thanks, Ada!')
+
+  await vi.waitFor(() => {
+    const active = document.activeElement
+    expect(active?.tagName).toBe('H1')
+    expect(active?.classList.contains('fsr-title')).toBe(true)
+    expect(active?.textContent).toContain('Thanks, Ada!')
+  })
+})

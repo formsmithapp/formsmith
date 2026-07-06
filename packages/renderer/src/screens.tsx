@@ -81,7 +81,11 @@ export function EndingView({ block }: { block: Block }) {
   return (
     <div>
       <span className="fsr-badge">{BADGE.thankyou}</span>
-      <h1 className="fsr-title">{piped(block.title)}</h1>
+      {/* Programmatic focus target so completion moves focus here (announced to
+          screen readers) instead of dropping it to <body>. */}
+      <h1 className="fsr-title" tabIndex={-1} data-fsr-autofocus>
+        {piped(block.title)}
+      </h1>
       {block.description !== undefined && <p className="fsr-desc">{piped(block.description)}</p>}
       <SubmitStatus />
       {redirectUrl !== undefined && <p className="fsr-submit-status">Redirecting…</p>}

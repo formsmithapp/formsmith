@@ -6,7 +6,7 @@ import { type BlockDefinition, v1BlockDefinitions } from '@formsmithapp/blocks'
 import type { BlockType } from '@formsmithapp/engine'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Search } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BlockIconTile } from './block-icons'
 import { useBuilder, useBuilderState } from './store-context'
 
@@ -26,6 +26,9 @@ export function Palette() {
   const state = useBuilderState()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  // True for the brief window between an insert and the dialog closing, so the
+  // close handler can hand focus to the new block instead of the trigger.
+  const insertedRef = useRef(false)
 
   const hasWelcome = state.doc.blocks.some((b) => b.type === 'welcome')
 
@@ -53,6 +56,7 @@ export function Palette() {
   const insert = (type: string) => {
     const id = store.insertBlock(type as BlockType)
     if (id !== null) {
+      insertedRef.current = true
       store.setPaletteOpen(false)
       setQuery('')
     }
@@ -79,6 +83,14 @@ export function Palette() {
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-[2px]" />
         <Dialog.Content
           onKeyDown={onKeyDown}
+          onCloseAutoFocus={(event) => {
+            // After an insert, let the new block's title editor take focus
+            // rather than Radix restoring it to the trigger.
+            if (insertedRef.current) {
+              event.preventDefault()
+              insertedRef.current = false
+            }
+          }}
           className="fixed top-[14vh] left-1/2 z-50 w-[min(680px,92vw)] -translate-x-1/2 overflow-hidden rounded-[16px] border border-line bg-surface-2 shadow-lg"
         >
           <Dialog.Title className="sr-only">Add a block</Dialog.Title>

@@ -41,6 +41,9 @@ export interface BuilderState {
   canRedo: boolean
   paletteOpen: boolean
   previewMode: boolean
+  /** Transient: a block whose title editor should take focus once rendered
+   *  (set after insert or after a delete reveals a neighbor). Cleared on use. */
+  pendingTitleFocusId: string | null
 }
 
 export interface BuilderStoreOptions {
@@ -86,6 +89,7 @@ export function createBuilderStore(options: BuilderStoreOptions) {
     canRedo: false,
     paletteOpen: false,
     previewMode: false,
+    pendingTitleFocusId: null,
   }
 
   const listeners = new Set<() => void>()
@@ -157,6 +161,9 @@ export function createBuilderStore(options: BuilderStoreOptions) {
     setPreviewMode(on: boolean) {
       setState({ previewMode: on })
     },
+    consumeTitleFocus() {
+      if (state.pendingTitleFocusId !== null) setState({ pendingTitleFocusId: null })
+    },
 
     updateFormTitle(title: string) {
       commit({ ...state.doc, title }, 'form:title')
@@ -208,19 +215,25 @@ export function createBuilderStore(options: BuilderStoreOptions) {
       }
       const blocks = [...doc.blocks.slice(0, at), block, ...doc.blocks.slice(at)]
       commit(patchBlocks(blocks))
-      setState({ selectedId: block.id })
+      setState({ selectedId: block.id, pendingTitleFocusId: block.id })
       return block.id
     },
 
-    removeBlock(id: string) {
+    removeBlock(id: string): string | null {
       const index = blockIndex(id)
       const block = state.doc.blocks[index]
-      if (index < 0 || block === undefined) return
+      if (index < 0 || block === undefined) return null
       const cascaded = removeBlockCascade(state.doc, block)
       const blocks = cascaded.blocks.filter((b) => b.id !== id)
       const neighbor = blocks[Math.min(index, blocks.length - 1)]
       commit({ ...cascaded, blocks })
-      if (state.selectedId === id) setState({ selectedId: neighbor?.id ?? null })
+      // When the deleted block was selected, move selection AND focus to the
+      // neighbor's title so focus never falls to <body>. When it was not
+      // selected (deleted from the rail), the caller recovers focus instead.
+      if (state.selectedId === id) {
+        setState({ selectedId: neighbor?.id ?? null, pendingTitleFocusId: neighbor?.id ?? null })
+      }
+      return neighbor?.id ?? null
     },
 
     duplicateBlock(id: string) {

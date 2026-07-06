@@ -22,7 +22,9 @@ function EndingFallback() {
   return (
     <div>
       <span className="fsr-badge">Thank you</span>
-      <h1 className="fsr-title">Thanks for your response.</h1>
+      <h1 className="fsr-title" tabIndex={-1} data-fsr-autofocus>
+        Thanks for your response.
+      </h1>
       {/* Route through the real delivery status so this never claims success
           while the submission is still sending or has failed. */}
       <SubmitStatus />

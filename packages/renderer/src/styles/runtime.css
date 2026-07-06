@@ -31,6 +31,11 @@
   outline: 2px solid var(--brand-ring);
   outline-offset: 2px;
 }
+/* Screen and ending headings receive focus programmatically only to move the
+   reading point to the message; they are not interactive, so no focus ring. */
+.fsr-title[tabindex]:focus-visible {
+  outline: none;
+}
 
 .fsr-visually-hidden {
   position: absolute;

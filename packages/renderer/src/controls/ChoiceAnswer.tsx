@@ -26,9 +26,15 @@ export function ChoiceAnswer(props: ControlProps) {
   const multiple = isMultiSelect(block)
   const selected = selectedChoiceIds(block, state.answers[block.ref])
 
-  const pick = (id: string) => {
-    const advance = commitChoice(engine, block, id)
-    if (advance) scheduleAdvance(engine, block.id)
+  const record = (id: string) => {
+    commitChoice(engine, block, id)
+  }
+  // Advance only on a genuine pointer click. Chromium also fires a click when a
+  // radio is selected via arrow keys or Space, but with detail === 0, so
+  // browsing the radios never skips the question (WCAG 3.2.2). Keyboard users
+  // commit with a letter key, Enter, or the OK button; multi never advances.
+  const advanceOnPointerClick = (detail: number) => {
+    if (detail > 0 && !multiple) scheduleAdvance(engine, block.id)
   }
 
   return (
@@ -52,7 +58,8 @@ export function ChoiceAnswer(props: ControlProps) {
               name={block.id}
               value={choice.id}
               checked={isSelected}
-              onChange={() => pick(choice.id)}
+              onChange={() => record(choice.id)}
+              onClick={(event) => advanceOnPointerClick(event.detail)}
               data-fsr-autofocus={index === 0 ? true : undefined}
             />
             {letter !== null && (

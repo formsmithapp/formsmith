@@ -17,6 +17,7 @@ export function InlineEdit({
   onChange,
   className,
   blurOnEnter = true,
+  autoFocus = false,
 }: {
   value: string
   placeholder: string
@@ -24,6 +25,7 @@ export function InlineEdit({
   onChange: (next: string) => void
   className?: string
   blurOnEnter?: boolean
+  autoFocus?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -31,6 +33,14 @@ export function InlineEdit({
     const el = ref.current
     if (el !== null && el.textContent !== value) el.textContent = value
   }, [value])
+
+  // Take focus when requested (a freshly inserted block, or the neighbor after
+  // a delete). rAF defers past the palette dialog's own close focus-restore.
+  useEffect(() => {
+    if (!autoFocus) return
+    const frame = requestAnimationFrame(() => ref.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [autoFocus])
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: inline-editing affordance, builder-only (real inputs live in the runtime)

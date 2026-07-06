@@ -80,6 +80,7 @@ function RailRow({
       )}
       <div
         data-rail-row={block.ref}
+        data-rail-block={block.id}
         className={`group flex w-full items-center gap-2 rounded-[10px] border py-2 pr-2.5 pl-1 transition-colors ${
           selected ? 'border-brand/30 bg-brand-soft' : 'border-transparent hover:bg-surface-hover'
         } ${isDragging ? 'bg-surface-2 shadow-md' : ''} ${hiddenNow ? 'opacity-55' : ''}`}
@@ -139,7 +140,16 @@ function RailRow({
             aria-label="Delete block"
             onClick={(event) => {
               event.stopPropagation()
-              store.removeBlock(block.id)
+              const neighborId = store.removeBlock(block.id)
+              // Deleting a non-selected row does not move focus via the canvas,
+              // so recover it onto the neighbor row instead of dropping to body.
+              if (!selected && neighborId !== null) {
+                requestAnimationFrame(() => {
+                  document
+                    .querySelector<HTMLElement>(`[data-rail-block="${neighborId}"] button`)
+                    ?.focus()
+                })
+              }
             }}
             className="grid size-6 place-items-center rounded-md text-fg-3 hover:bg-surface-2 hover:text-error"
           >

@@ -24,9 +24,13 @@ export function ScaleAnswer(props: ControlProps) {
   const tiles: number[] = []
   for (let n = range.min; n <= range.max; n++) tiles.push(n)
 
-  const pick = (n: number) => {
-    engine.setAnswer(block.ref, n)
-    scheduleAdvance(engine, block.id)
+  const record = (n: number) => engine.setAnswer(block.ref, n)
+  // Advance only on a genuine pointer click (detail > 0). Chromium fires a
+  // click for arrow/Space tile selection too, but with detail === 0, so
+  // arrowing the tiles to read them never skips the question (WCAG 3.2.2).
+  // Number keys, Enter, and OK still advance via the global handler.
+  const advanceOnPointerClick = (detail: number) => {
+    if (detail > 0) scheduleAdvance(engine, block.id)
   }
 
   return (
@@ -47,7 +51,8 @@ export function ScaleAnswer(props: ControlProps) {
               name={block.id}
               value={n}
               checked={value === n}
-              onChange={() => pick(n)}
+              onChange={() => record(n)}
+              onClick={(event) => advanceOnPointerClick(event.detail)}
               aria-label={String(n)}
               data-fsr-autofocus={index === 0 ? true : undefined}
             />

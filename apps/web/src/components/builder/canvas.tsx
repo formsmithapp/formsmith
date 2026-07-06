@@ -5,7 +5,7 @@
 import type { Block } from '@formsmithapp/engine'
 import { parseThemeConfig } from '@formsmithapp/ui'
 import { Braces, CornerDownRight, Plus, Sparkles, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SCREEN_TYPES } from '@/lib/builder-store'
 import { useFormTheming } from '../use-theme'
 import { InlineEdit } from './inline-edit'
@@ -239,6 +239,12 @@ export function Canvas() {
   const block =
     state.doc.blocks.find((b) => b.id === state.selectedId) ?? state.doc.blocks[0] ?? null
 
+  // Clear the one-shot title-focus request after a render has had the chance to
+  // act on it. The InlineEdit autoFocus effect (a child) runs before this one.
+  useEffect(() => {
+    if (state.pendingTitleFocusId !== null) store.consumeTitleFocus()
+  }, [state.pendingTitleFocusId, store])
+
   const answerable = state.doc.blocks.filter((b) => !SCREEN_TYPES.has(b.type))
   const questionNumber = block !== null ? answerable.findIndex((b) => b.id === block.id) + 1 : 0
   const isScreen = block !== null && SCREEN_TYPES.has(block.type)
@@ -317,6 +323,7 @@ export function Canvas() {
                 value={block.title}
                 placeholder={isScreen ? 'Screen headline…' : 'Type your question…'}
                 label={`${isScreen ? 'Screen' : 'Question'} title`}
+                autoFocus={state.pendingTitleFocusId === block.id}
                 onChange={(title) => store.updateBlock(block.id, { title }, `title:${block.id}`)}
                 className={`min-w-0 flex-1 font-serif text-[clamp(26px,3.4vw,40px)] leading-[1.18] font-semibold tracking-[-0.012em] [text-wrap:balance] ${
                   isAi
