@@ -10,7 +10,7 @@ import { FormRuntime, type FormRuntimeProps } from './FormRuntime'
 import { kitchenSink, linearForm, quizForm } from './fixtures'
 import './styles/runtime.css'
 
-// tokens are generated from @formsmithapp/ui at build — inject the same
+// tokens are generated from @formsmithapp/ui at build, inject the same
 const tokenStyle = document.createElement('style')
 tokenStyle.textContent = themeTokensCss('.fsr-root', '.fsr-root[data-theme="dark"]')
 document.head.appendChild(tokenStyle)
@@ -197,8 +197,8 @@ it('completes the kitchen-sink fixture KEYBOARD-ONLY across every block type', a
 it('pipes the computed score into the branched ending (scored quiz)', async () => {
   const { engine, host } = mountForm(quizForm())
   await settled(host, 'What is 2 + 2?')
-  await userEvent.keyboard('b') // "4" — correct, +10
-  await settled(host, 'Great — 10 points!')
+  await userEvent.keyboard('b') // "4" is correct, +10
+  await settled(host, 'Great, 10 points!')
   expect(engine.getState().variables.score).toBe(10)
 })
 
@@ -391,4 +391,36 @@ it('AI EXCHANGE: handler failure/absence degrades to plain advancement', async (
   await settled(plain.host, 'Thoughts?')
   await userEvent.keyboard('{Enter}') // optional + empty + no handler involvement
   await settled(plain.host, 'Bye!')
+})
+
+it('renders a block description as fsr-desc and links the control via aria-describedby', async () => {
+  const form: FormDefinition = {
+    id: 'r_desc',
+    version: 1,
+    blocks: [
+      { id: 'b_welcome', ref: 'intro', type: 'welcome', title: 'Hello' },
+      {
+        id: 'b_desc',
+        ref: 'full_name',
+        type: 'short_text',
+        title: 'What is your name?',
+        description: 'Your full legal name, please.',
+      },
+      { id: 'b_end', ref: 'ending', type: 'thankyou', title: 'Thanks!' },
+    ],
+  }
+  const { host } = mountForm(form)
+  await settled(host, 'Hello')
+  await userEvent.keyboard('{Enter}')
+  await settled(host, 'What is your name?')
+
+  // the description renders as the fsr-desc line with a stable id
+  const desc = host.querySelector('#fsr-d-b_desc')
+  expect(desc?.classList.contains('fsr-desc')).toBe(true)
+  expect(desc?.textContent).toContain('Your full legal name')
+
+  // and the focused control points at it via aria-describedby (the a11y wiring)
+  const control = host.querySelector('[data-fsr-autofocus]')
+  const describedBy = control?.getAttribute('aria-describedby')?.split(' ') ?? []
+  expect(describedBy).toContain('fsr-d-b_desc')
 })

@@ -27,7 +27,7 @@ export const linearForm = (): FormDefinition => ({
   ],
 })
 
-/** The scored quiz — piped score branches to pass/fail endings. */
+/** The scored quiz, piped score branches to pass/fail endings. */
 export const quizForm = (): FormDefinition => ({
   id: 'r_quiz',
   version: 1,
@@ -45,7 +45,7 @@ export const quizForm = (): FormDefinition => ({
         ],
       },
     },
-    { id: 'b_pass', ref: 'ending_pass', type: 'thankyou', title: 'Great — {{score}} points!' },
+    { id: 'b_pass', ref: 'ending_pass', type: 'thankyou', title: 'Great, {{score}} points!' },
   ],
   variables: [{ name: 'score', type: 'number', initialValue: 0 }],
   logic: [
@@ -58,7 +58,7 @@ export const quizForm = (): FormDefinition => ({
   ],
 })
 
-/** Every v1 block type once — the keyboard-only completion fixture. */
+/** Every v1 block type once, the keyboard-only completion fixture. */
 export const kitchenSink = (): FormDefinition => ({
   id: 'r_sink',
   version: 1,

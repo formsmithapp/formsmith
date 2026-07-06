@@ -542,6 +542,20 @@ function BlockPanel({
       )}
 
       <Section title={ai ? '✦ AI behavior' : 'Content'}>
+        <TextField
+          label="Description"
+          value={block.description ?? ''}
+          placeholder="Optional text shown under the title"
+          hint="Also editable inline under the title on the canvas. Same field, two places."
+          multiline
+          onCommit={(text) =>
+            store.updateBlock(
+              block.id,
+              { description: text === '' ? undefined : text },
+              `desc:${block.id}`,
+            )
+          }
+        />
         <TypeSettings block={block} issues={propertyIssues} />
         {(block.type === 'multiple_choice' || block.type === 'dropdown') && (
           <p className="text-[11.5px] text-fg-3">
