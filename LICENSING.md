@@ -5,7 +5,7 @@ licensed how, and why. If anything elsewhere appears to contradict this file, th
 
 **TL;DR** — the core is AGPL-3.0-only and stays that way (see
 [OPEN-CORE-COVENANT.md](OPEN-CORE-COVENANT.md)). The pieces that live inside *your* codebase
-(embed SDK, framework wrappers, API client) are MIT so your legal team never has to think
+(embed SDK, framework wrappers, API client) will be MIT so your legal team never has to think
 about copyleft. A small set of enterprise modules is commercially licensed.
 
 ---
@@ -34,6 +34,9 @@ about copyleft. A small set of enterprise modules is commercially licensed.
 - The repository root `LICENSE` file is the full AGPL-3.0 text and governs by default.
 - Every **MIT** package carries its own `LICENSE` file (a copy of `LICENSES/MIT.txt`).
 - Everything under `modules/ee/` is governed by `modules/ee/LICENSE`, not the AGPL.
+- The MIT integration-surface packages (`embed`, the framework wrappers, `sdk`) are
+  **forthcoming** — this table declares their license ahead of release so the boundary is
+  fixed before any code ships. Published forms are already embeddable via `<iframe>` today.
 
 ## 2. Copyright
 

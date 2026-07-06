@@ -1,0 +1,32 @@
+# Formsmith
+
+> Formsmith is an open-source, self-hostable, AI-native form builder — beautiful,
+> one-question-at-a-time conversational forms with an AI interviewer that asks adaptive
+> follow-up questions on your own model and key. The whole product self-hosts with two
+> containers (web + Postgres); every response stays on infrastructure you control. Licensing
+> is open-core: AGPL-3.0 core, MIT integration surface, commercially-licensed enterprise
+> modules.
+
+## Start here
+
+- [README](https://github.com/formsmithapp/formsmith/blob/main/README.md): what Formsmith is, quickstart, architecture, licensing.
+- [Roadmap](https://github.com/formsmithapp/formsmith/blob/main/docs/roadmap.md): what's shipped in v0.1.0, what's next in v1.1, and why some things are deliberately cut.
+- [Self-hosting guide](https://github.com/formsmithapp/formsmith/blob/main/docs/self-hosting.md): deploy, configure, TLS, backups, upgrades.
+
+## Trust & positioning
+
+- [Why open source](https://github.com/formsmithapp/formsmith/blob/main/docs/why-open-source.md): the open-core split, how it's funded, and who Formsmith is (and isn't) for.
+- [Your data](https://github.com/formsmithapp/formsmith/blob/main/docs/your-data.md): data ownership, no telemetry, bring-your-own AI key, and the built-in security defaults.
+- [Pricing](https://github.com/formsmithapp/formsmith/blob/main/docs/pricing.md): self-host free forever; managed hosted tier coming soon; enterprise modules.
+- [Licensing](https://github.com/formsmithapp/formsmith/blob/main/LICENSING.md): the authoritative license map.
+
+## How it compares
+
+- [Formsmith vs Typeform](https://github.com/formsmithapp/formsmith/blob/main/docs/comparisons/formsmith-vs-typeform.md)
+- [Formsmith vs HeyForm](https://github.com/formsmithapp/formsmith/blob/main/docs/comparisons/formsmith-vs-heyform.md)
+
+## Developer
+
+- [Webhooks](https://github.com/formsmithapp/formsmith/blob/main/docs/webhooks.md): HMAC-signed webhook payloads and verification.
+- [Contributing](https://github.com/formsmithapp/formsmith/blob/main/CONTRIBUTING.md)
+- [Changelog](https://github.com/formsmithapp/formsmith/blob/main/CHANGELOG.md)

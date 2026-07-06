@@ -1,0 +1,75 @@
+# Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+name: 🛠️ Self-host help
+description: A concrete, reproducible problem deploying or running your own instance.
+labels: ['self-host', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for a **specific, reproducible** deployment problem (compose
+        won't come up, migrations fail, a config setting doesn't behave as documented).
+        For open-ended "how do I…" questions, please use
+        [Discussions](https://github.com/formsmithapp/formsmith/discussions) — you'll
+        often get a faster answer there.
+
+        Please read [docs/self-hosting.md](https://github.com/formsmithapp/formsmith/blob/main/docs/self-hosting.md) first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's going wrong?
+      description: What did you run, what did you expect, what happened?
+    validations:
+      required: true
+  - type: dropdown
+    id: method
+    attributes:
+      label: How are you deploying?
+      options:
+        - docker compose (default image)
+        - Building the image from source
+        - Custom / other orchestration
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 'e.g. v0.1.0 (see /api/health)'
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Host environment
+      placeholder: |
+        - OS + arch: e.g. Debian 12, amd64
+        - Docker + Compose versions
+        - Reverse proxy (if any): Caddy / nginx / Traefik / none
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: Your compose overrides and env keys. **Redact secrets — show key names, not values.**
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container logs
+      description: '`docker compose logs web` / `postgres`. **Redact any secrets or personal data.**'
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read docs/self-hosting.md.
+          required: true
+        - label: I removed all secrets and personal data from the config and logs above.
+          required: true

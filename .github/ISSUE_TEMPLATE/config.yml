@@ -1,0 +1,10 @@
+# Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & self-host Q&A
+    url: https://github.com/formsmithapp/formsmith/discussions
+    about: For usage questions, setup help, and general discussion, please open a Discussion. Issues are for confirmed bugs and concrete requests.
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/formsmithapp/formsmith/security/policy
+    about: Please report security issues privately per our Security Policy — do NOT open a public issue.

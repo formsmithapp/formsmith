@@ -1,0 +1,51 @@
+# Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# CLA Assistant — asks first-time contributors to accept CLA.md on their first PR,
+# and records the signature. Uses the built-in GITHUB_TOKEN (no extra secret needed);
+# signatures are stored in this repo under .github/cla-signatures/.
+#
+# Contributors sign by commenting on their PR:
+#   "I have read the CLA Document and I hereby sign the CLA"
+# and can force a re-check by commenting "recheck".
+#
+# Later hardening (optional): store signatures in a separate PRIVATE repo instead by
+# setting PERSONAL_ACCESS_TOKEN + `remote-repository-name` below — keeps signer records
+# out of the public tree. Not required for launch.
+name: CLA Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CLA Assistant
+        if: >
+          (github.event.comment.body == 'recheck' ||
+           github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') ||
+          github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: '.github/cla-signatures/v1.json'
+          path-to-document: 'https://github.com/formsmithapp/formsmith/blob/main/CLA.md'
+          branch: 'main'
+          allowlist: 'gnana997,dependabot[bot],*[bot]'
+          custom-notsigned-prcomment: >
+            Thanks for your contribution! Before we can merge it, please read our
+            [Contributor License Agreement](https://github.com/formsmithapp/formsmith/blob/main/CLA.md)
+            and sign by posting exactly this comment:
+          custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
+          custom-allsigned-prcomment: 'All contributors have signed the CLA. ✅'

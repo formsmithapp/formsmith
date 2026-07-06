@@ -2,13 +2,19 @@
 
 **Beautiful conversational forms you actually own.**
 
+[![CI](https://github.com/formsmithapp/formsmith/actions/workflows/ci.yml/badge.svg)](https://github.com/formsmithapp/formsmith/actions/workflows/ci.yml)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSING.md)
+[![Container: ghcr.io](https://img.shields.io/badge/ghcr.io-formsmithapp%2Fformsmith-2496ED?logo=docker&logoColor=white)](https://github.com/formsmithapp/formsmith/pkgs/container/formsmith)
+
 Formsmith is an open-source, self-hostable, AI-native form builder — immersive,
 one-question-at-a-time forms with an AI interviewer that asks adaptive follow-up questions,
 running entirely on infrastructure you control.
 
-> 🚧 **Pre-release.** Formsmith is being built in the open toward its first release (v1). The
-> licensing foundation is in place; the application is under active development. Watch this repo
-> and [formsmith.app](https://formsmith.app) for the launch.
+> **v0.1.0 — first public release.** Formsmith is live and self-hostable today: `docker compose up`
+> gives you the builder, the AI interviewer, and every response on your own Postgres. This is a
+> deliberately quiet first release — real-world use, [issues](https://github.com/formsmithapp/formsmith/issues),
+> and [discussions](https://github.com/formsmithapp/formsmith/discussions) are exactly what it needs.
+> See the **[roadmap](docs/roadmap.md)** for what's next and why the cuts are deliberate.
 
 ---
 
@@ -34,8 +40,8 @@ and developers who want to own their stack.
 - Conditional logic, jump/branching, calculated fields & scoring, answer piping.
 - A portable, framework-agnostic core engine that runs identically in the browser, Node, and at the
   edge — client-side for instant UX, server-side for trust.
-- A tiny, zero-dependency embed SDK (iframe) that drops into any site — React, Vue, Svelte, or plain
-  HTML.
+- Every published form is a standalone, embeddable page — drop it into any site with an `<iframe>`
+  today. A tiny, zero-dependency embed SDK and React/Vue/Svelte wrappers are on the [roadmap](docs/roadmap.md).
 - HMAC-signed webhooks, a REST API with a generated OpenAPI spec, and full CSV/JSON export. Your data
   is never locked in.
 - Bring-your-own SMTP and LLM key; every integration is optional — features degrade, forms never break.
@@ -70,8 +76,8 @@ packages/
   rules      logic engine (visibility · jump · calculation)
   ai         adaptive AI follow-up orchestration (bring-your-own model)
   renderer   the respondent + builder-preview view
-  embed      zero-dependency embed SDK
-  db · adapters · schemas · ui · sdk
+  templates  starter form templates
+  db · adapters · schemas · ui
 apps/
   web        builder · dashboard · results · control-plane API
   api        public data-plane API
@@ -79,14 +85,19 @@ modules/
   ee         enterprise features (commercially licensed)
 ```
 
+Planned (the MIT integration surface): a zero-dependency `embed` SDK, framework wrappers
+(React/Vue/Svelte), and an `sdk` client. Published forms are already frameable via `<iframe>`
+today — the wrappers are convenience on top.
+
 ## Licensing
 
 Formsmith is **open-core**. [`LICENSING.md`](LICENSING.md) is the authoritative map:
 
 - **Core** (engine, renderer, apps, AI orchestration, …) — **AGPL-3.0-only**. Self-host it, or even
   offer it as a service; you simply cannot take the core closed.
-- **Integration surface** (embed SDK, framework wrappers, API client) — **MIT**, so embedding a
-  Formsmith form never raises copyleft questions for your own codebase.
+- **Integration surface** (embed SDK, framework wrappers, API client) — **MIT** as it ships, so
+  embedding a Formsmith form never raises copyleft questions for your own codebase. (Published forms
+  are already embeddable via `<iframe>` today; the dedicated SDK and wrappers are forthcoming.)
 - **Enterprise modules** (`modules/ee`) — commercially licensed.
 
 And a public promise: the [Open-Core Covenant](OPEN-CORE-COVENANT.md) commits, in writing and in git
@@ -107,6 +118,12 @@ You may self-host, describe, teach, and build on Formsmith freely; public forks 
 ## Links
 
 - Website: [formsmith.app](https://formsmith.app)
+- Roadmap: [docs/roadmap.md](docs/roadmap.md) · Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Why open source & how it's funded: [docs/why-open-source.md](docs/why-open-source.md)
+- Your data (privacy & security stance): [docs/your-data.md](docs/your-data.md)
+- Pricing: [docs/pricing.md](docs/pricing.md)
+- How it compares: [vs Typeform](docs/comparisons/formsmith-vs-typeform.md) · [vs HeyForm](docs/comparisons/formsmith-vs-heyform.md)
+- Self-hosting guide: [docs/self-hosting.md](docs/self-hosting.md)
 - Issues & discussions: this repository
 - Contact: gnana097@gmail.com
 
