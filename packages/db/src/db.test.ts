@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { FormDefinition } from '@formsmithapp/engine'
+import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from './client'
 import { apiKeysRepository, webhooksRepository } from './repositories/connect'
@@ -8,6 +9,7 @@ import { creditsRepository } from './repositories/credits'
 import { formsRepository } from './repositories/forms'
 import { responsesRepository } from './repositories/responses'
 import { createWorkspaceWithOwner, workspaceForUser } from './repositories/workspaces'
+import { forms as formsTable, workspaces as workspacesTable } from './schema'
 import { createTestDb, createTestUser } from './testing/harness'
 
 const doc = (title = 'Test form'): FormDefinition => ({
@@ -288,5 +290,28 @@ describe('credits + quotas (v0.1.5)', () => {
     expect(await formsRepo.workspaceOf(crypto.randomUUID())).toBeNull()
     expect(await webhooksRepository(db).count(f.id)).toBe(0)
     expect(await apiKeysRepository(db).count(wsA.id)).toBe(0)
+  })
+})
+
+describe('abuse kill switch (v0.1.5)', () => {
+  it('a suspended form or workspace stops serving; isSuspended reflects both', async () => {
+    const repo = formsRepository(db)
+    const created = await repo.create(wsA.id, doc())
+    await repo.publish(wsA.id, created.id)
+
+    // servable by default
+    expect(await repo.getPublicSnapshot(created.id)).not.toBeNull()
+    expect(await repo.isSuspended(created.id)).toBe(false)
+
+    // suspend the FORM → stops serving
+    await db.update(formsTable).set({ suspended: true }).where(eq(formsTable.id, created.id))
+    expect(await repo.getPublicSnapshot(created.id)).toBeNull()
+    expect(await repo.isSuspended(created.id)).toBe(true)
+
+    // un-suspend the form but suspend the WORKSPACE → still stops serving
+    await db.update(formsTable).set({ suspended: false }).where(eq(formsTable.id, created.id))
+    await db.update(workspacesTable).set({ suspended: true }).where(eq(workspacesTable.id, wsA.id))
+    expect(await repo.getPublicSnapshot(created.id)).toBeNull()
+    expect(await repo.isSuspended(created.id)).toBe(true)
   })
 })

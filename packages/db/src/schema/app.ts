@@ -3,6 +3,7 @@
 
 import type { FormDefinition } from '@formsmithapp/engine'
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -25,6 +26,9 @@ import { user } from './auth'
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  /** Abuse kill switch: when true, none of this workspace's forms serve or
+   * accept responses. Flipped via SQL runbook (no admin UI in v1). */
+  suspended: boolean('suspended').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -61,6 +65,8 @@ export const forms = pgTable(
       .notNull()
       .default('draft'),
     publishedVersion: integer('published_version'),
+    /** Abuse kill switch for a single form (see workspaces.suspended). */
+    suspended: boolean('suspended').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

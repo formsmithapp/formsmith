@@ -56,6 +56,8 @@ export interface FormRuntimeProps {
   aiDisclosure?: boolean
   /** "Powered by Formsmith" badge. Default true. */
   branding?: boolean
+  /** A "Report abuse" link href (host-built, e.g. a mailto). Absent = hidden. */
+  reportAbuseUrl?: string
   theme?: 'light' | 'dark' | 'auto'
   /**
    * Flat CSS custom-property overrides (`--brand`, `--canvas`, …) applied
@@ -92,13 +94,14 @@ export function FormRuntime(props: FormRuntimeProps) {
     () => ({
       aiDisclosure: props.aiDisclosure !== false,
       branding: props.branding !== false,
+      reportAbuseUrl: props.reportAbuseUrl,
       onRedirect:
         props.onRedirect ??
         ((url: string) => {
           if (typeof window !== 'undefined') window.location.assign(url)
         }),
     }),
-    [props.aiDisclosure, props.branding, props.onRedirect],
+    [props.aiDisclosure, props.branding, props.reportAbuseUrl, props.onRedirect],
   )
 
   /* ---------- the AI follow-up exchange loop (D0: inside the block) ---------- */
@@ -403,6 +406,11 @@ export function FormRuntime(props: FormRuntimeProps) {
               >
                 Powered by <b>Formsmith</b>
                 <span className="fsr-visually-hidden"> (opens in a new tab)</span>
+              </a>
+            )}
+            {options.reportAbuseUrl !== undefined && (
+              <a className="fsr-report-abuse" href={options.reportAbuseUrl} rel="noreferrer">
+                Report abuse
               </a>
             )}
           </div>

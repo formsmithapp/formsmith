@@ -506,6 +506,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       if (await overLimit('submit', `${clientIp(c.req.raw.headers)}:${id}`, submitMax, 60)) {
         return c.json({ error: 'rate limited' }, 429)
       }
+      // abuse kill switch: a suspended form stops accepting responses at once
+      // (the version-pinned snapshot cache would otherwise bypass suspension)
+      if (await forms.isSuspended(id)) return c.json(NOT_FOUND, 404)
       const payload = c.req.valid('json')
       const snapshot = await cachedSnapshot(id, payload.formVersion)
       if (snapshot === null) return c.json(NOT_FOUND, 404)
@@ -629,6 +632,8 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      // suspended forms spend no more of the operator's LLM budget
+      if (await forms.isSuspended(id)) return c.json(NOT_FOUND, 404)
       // this endpoint spends the operator's LLM budget
       if (await overLimit('ai', `${clientIp(c.req.raw.headers)}:${id}`, 30, 60)) {
         return c.json({ error: 'rate limited' }, 429)

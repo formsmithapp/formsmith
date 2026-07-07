@@ -47,6 +47,9 @@ const envSchema = z.object({
    * runtime, never NEXT_PUBLIC, so one image serves any instance). */
   TURNSTILE_SECRET_KEY: z.string().optional(),
   TURNSTILE_SITE_KEY: z.string().optional(),
+  /** Report-abuse contact for the respondent form footer (an email address).
+   * Set = a "Report abuse" mailto link shows on public forms; unset = hidden. */
+  FORMSMITH_ABUSE_CONTACT: z.string().optional(),
   /** Optional host split. Set to a dedicated public-forms host to serve
    * respondent pages on their own host; unset = single-host, current behavior
    * untouched. The proxy reads process.env directly; this documents it and keeps

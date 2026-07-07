@@ -14,6 +14,8 @@ export interface RuntimeOptions {
   branding: boolean
   /** Per-ending redirects go through here — embeds can postMessage instead. */
   onRedirect: (url: string) => void
+  /** A "Report abuse" link href (host-built). Undefined = hidden. */
+  reportAbuseUrl?: string
 }
 
 export const OptionsContext = createContext<RuntimeOptions>({

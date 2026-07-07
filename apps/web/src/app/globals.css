@@ -17,6 +17,12 @@ body {
   height: 100%;
 }
 
+/* Reserve the scrollbar gutter always, so content that grows past one viewport
+   (async loads, tab switches) never shifts the centered chrome sideways. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--paper);
   color: var(--text);

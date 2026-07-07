@@ -35,10 +35,17 @@ export async function generateMetadata({
 
 export default async function LiveFormPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const env = serverEnv()
+  const abuse = env.FORMSMITH_ABUSE_CONTACT
+  const reportAbuseUrl =
+    abuse === undefined
+      ? undefined
+      : `mailto:${abuse}?subject=${encodeURIComponent(`Report abuse: form ${id}`)}`
   return (
     <LiveForm
       form={await loadPublicSnapshot(id)}
-      branding={!envFlag(serverEnv().FORMSMITH_HIDE_BADGE)}
+      branding={!envFlag(env.FORMSMITH_HIDE_BADGE)}
+      reportAbuseUrl={reportAbuseUrl}
     />
   )
 }

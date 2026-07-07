@@ -4,7 +4,7 @@
 import type { FormDefinition } from '@formsmithapp/engine'
 import { and, count, desc, eq } from 'drizzle-orm'
 import type { Database } from '../client'
-import { forms, formVersions } from '../schema'
+import { forms, formVersions, workspaces } from '../schema'
 
 /**
  * Forms persistence — the server-side twin of the web app's FormsRepository
@@ -127,7 +127,11 @@ export function formsRepository(db: Database) {
       return rows[0]?.doc ?? null
     },
 
-    /** Unscoped snapshot read — the PUBLIC serve path (S2's GET /f/:id). */
+    /**
+     * Unscoped snapshot read, the PUBLIC serve path (GET /f/:id). A suspended
+     * form OR a suspended workspace returns null (the abuse kill switch), so the
+     * page renders the friendly unavailable state exactly like an unknown form.
+     */
     async getPublicSnapshot(formId: string): Promise<FormDefinition | null> {
       const rows = await db
         .select({ doc: formVersions.doc, publishedVersion: forms.publishedVersion })
@@ -136,9 +140,29 @@ export function formsRepository(db: Database) {
           formVersions,
           and(eq(formVersions.formId, forms.id), eq(formVersions.version, forms.publishedVersion)),
         )
-        .where(eq(forms.id, formId))
+        .innerJoin(workspaces, eq(forms.workspaceId, workspaces.id))
+        .where(
+          and(eq(forms.id, formId), eq(forms.suspended, false), eq(workspaces.suspended, false)),
+        )
         .limit(1)
       return rows[0]?.doc ?? null
+    },
+
+    /**
+     * Is this form (or its workspace) suspended? The submit path checks this
+     * directly because it may serve from the immutable version cache, which
+     * bypasses `getPublicSnapshot`. Unknown form = not suspended (the snapshot
+     * lookup 404s it anyway).
+     */
+    async isSuspended(formId: string): Promise<boolean> {
+      const rows = await db
+        .select({ form: forms.suspended, workspace: workspaces.suspended })
+        .from(forms)
+        .innerJoin(workspaces, eq(forms.workspaceId, workspaces.id))
+        .where(eq(forms.id, formId))
+        .limit(1)
+      const row = rows[0]
+      return row !== undefined && (row.form || row.workspace)
     },
 
     /**

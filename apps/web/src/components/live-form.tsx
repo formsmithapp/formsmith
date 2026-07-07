@@ -19,10 +19,13 @@ import { useFormTheming } from './use-theme'
 export function LiveForm({
   form,
   branding = true,
+  reportAbuseUrl,
 }: {
   form: FormDefinition | null
   /** "Powered by Formsmith" badge — FORMSMITH_HIDE_BADGE turns it off. */
   branding?: boolean
+  /** "Report abuse" mailto link, when the instance configures a contact. */
+  reportAbuseUrl?: string
 }) {
   // the runtime is interactive-only: SSR (and the first client paint) render
   // a stable shell so hydration matches; the engine reads location.search
@@ -133,6 +136,7 @@ export function LiveForm({
         themeVars={theming?.vars}
         logoUrl={logoUrl}
         branding={branding}
+        reportAbuseUrl={reportAbuseUrl}
       />
     </main>
   )

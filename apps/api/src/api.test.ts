@@ -13,6 +13,7 @@ import {
   workspaceForUser,
 } from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
+import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -1134,5 +1135,41 @@ describe('email verification gate (v0.1.5 B)', () => {
       ((await (await app.request('/api/v1/meta')).json()) as { verificationRequired: boolean })
         .verificationRequired,
     ).toBe(false)
+  })
+})
+
+describe('abuse kill switch (v0.1.5 D)', () => {
+  it('a suspended form 404s serve, submit, and ai (no cache bypass)', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+    // suspend via the SQL runbook (direct db) BEFORE any serve caches the doc
+    await db.update(schema.forms).set({ suspended: true }).where(eq(schema.forms.id, id))
+
+    currentUser = null // respondent
+    expect((await app.request(`/api/v1/f/${id}`)).status).toBe(404)
+    expect(
+      (await app.request(`/api/v1/f/${id}/responses`, json({ answers: { plan: 'pro' } }))).status,
+    ).toBe(404)
+    expect(
+      (
+        await app.request(
+          `/api/v1/f/${id}/ai`,
+          json({ ref: 'plan', index: 1, baseAnswer: 'x', exchanges: [] }),
+        )
+      ).status,
+    ).toBe(404)
+  })
+
+  it('suspending the whole workspace stops its forms', async () => {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+    const ws = (await workspaceForUser(db, 'alice'))?.id ?? ''
+    await db.update(schema.workspaces).set({ suspended: true }).where(eq(schema.workspaces.id, ws))
+
+    currentUser = null
+    expect((await app.request(`/api/v1/f/${id}`)).status).toBe(404)
+    expect(
+      (await app.request(`/api/v1/f/${id}/responses`, json({ answers: { plan: 'pro' } }))).status,
+    ).toBe(404)
   })
 })
