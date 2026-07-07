@@ -14,6 +14,16 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.6], 2026-07-08
+
+### Added
+
+- Vercel AI Gateway as a provider option (`AI_GATEWAY_API_KEY`): one key reaches many models. Set
+  the model in `FORMSMITH_AI_MODEL` as a `creator/model` slug (for example
+  `google/gemini-2.5-flash-lite`, `openai/gpt-4o-mini`, or `anthropic/claude-haiku-4-5`). It takes
+  precedence when set and sits alongside the existing direct Anthropic key and OpenAI-compatible
+  endpoint options. Unset changes nothing.
+
 ## [0.1.5], 2026-07-07
 
 Optional metering, signup hardening, and abuse controls. Everything here is off by default and
@@ -179,7 +189,8 @@ The first public release. The whole product runs on two containers
   submit path fast under load.
 - **No telemetry or analytics of any kind**, a self-hosted instance never phones home.
 
-[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/formsmithapp/formsmith/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/formsmithapp/formsmith/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/formsmithapp/formsmith/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/formsmithapp/formsmith/compare/v0.1.2...v0.1.3
