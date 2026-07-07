@@ -19,7 +19,42 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # engine + renderer run their suites in real chromium (vitest browser
-      # mode — the isomorphism proof), so the runner needs the browser
+      # mode, the isomorphism proof), so the runner needs the browser
       - run: pnpm --filter @formsmithapp/engine exec playwright install --with-deps chromium
       - run: pnpm turbo build typecheck test
       - run: pnpm lint
+
+  # Full-page end-to-end suite (Playwright), including the a11y axe specs
+  # (apps/web/e2e/a11y.spec.ts) that scan the builder and a published form in
+  # light and dark. Needs a real Postgres; the app migrates it on boot.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: formsmith
+          POSTGRES_PASSWORD: formsmith
+          POSTGRES_DB: formsmith
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U formsmith -d formsmith"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Build the workspace packages the web app imports from dist (not web
+      # itself: the e2e webServer runs `next dev`).
+      - run: pnpm turbo build --filter='!web'
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      # Playwright boots `next dev`, which runs migrations on start against the
+      # postgres service (DATABASE_URL defaults to it in the playwright config).
+      - run: pnpm --filter web e2e

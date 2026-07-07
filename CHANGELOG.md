@@ -14,6 +14,29 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.2], 2026-07-07
+
+An accessibility pass with an automated axe regression net, plus small builder polish.
+
+### Added
+
+- Builder field-hints: inline helper text on the settings people ask about (the ending block's
+  Redirect URL vs Button URL, the reference key, number step, AI max follow-ups).
+- A "Description" field in the builder panel, editable alongside the existing canvas editor.
+- Accessibility test harness: axe scans at the component layer (every control type, plus error and
+  ending states) and full-page (the builder and a published form), in both light and dark themes,
+  gated on zero serious or critical violations, and wired into CI.
+
+### Changed
+
+- Accessibility (targeting WCAG 2.1 AA): keyboard focus is visible on every control; focus moves
+  sensibly on completion, insert, and delete instead of falling to the page; single-select and
+  scale questions no longer auto-advance while arrow-browsing (they advance on click or Enter);
+  contact fields advertise their input purpose for autofill; the block palette is a proper
+  combobox and the preview is a modal dialog; and landmarks, a skip link, forced-colors support,
+  and screen-reader labels were added throughout both surfaces.
+- Darkened the tertiary muted-text token in both themes so small captions meet 4.5:1 contrast.
+
 ## [0.1.1], 2026-07-06
 
 A round of UI/UX polish and accessibility fixes on top of the first release.
