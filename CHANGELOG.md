@@ -14,6 +14,14 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.3], 2026-07-07
+
+### Fixed
+
+- On a form's ending screen that has a call-to-action button, completing the form now moves keyboard
+  focus to that button, so pressing Enter follows it. Previously focus landed on the thank-you
+  heading and the button was reachable only by Tab.
+
 ## [0.1.2], 2026-07-07
 
 An accessibility pass with an automated axe regression net, plus small builder polish.
