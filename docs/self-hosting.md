@@ -63,6 +63,13 @@ never break** because a dependency is missing.
 | `WEBHOOK_ALLOW_PRIVATE` | no | `true` lets webhooks deliver to private/loopback addresses (e.g. n8n on the same box). Keep it off on internet-facing instances |
 | `FORMSMITH_SUBMIT_RATE` | no | Submissions per IP per form per minute (default 60). Raise it when many respondents share one network (classrooms, offices) |
 | `FORMSMITH_CACHE_MAX_ITEMS` | no | In-memory cache size for published forms and rate-limit windows (default 500) |
+| `FORMSMITH_AI_CREDITS_DEFAULT` | no | AI credits per workspace, metered against AI follow-ups and generation. Unset = unlimited |
+| `FORMSMITH_AI_GENERATION_COST` | no | Credits spent per AI form generation (default 5; each follow-up costs 1) |
+| `FORMSMITH_LIMIT_FORMS`, `FORMSMITH_LIMIT_RESPONSES_MONTH`, `FORMSMITH_LIMIT_WEBHOOKS`, `FORMSMITH_LIMIT_API_KEYS` | no | Caps on forms per workspace, responses per form per month, webhooks per form, and API keys per workspace. Each unset = unlimited |
+| `FORMSMITH_REQUIRE_EMAIL_VERIFICATION` | no | `true` requires a verified email before publishing or using AI (building and previewing stay open). Needs SMTP; if mail is unconfigured it is not enforced, so you cannot be locked out |
+| `TURNSTILE_SECRET_KEY` + `TURNSTILE_SITE_KEY` | no | Cloudflare Turnstile on sign-up/sign-in. Both required, or it stays off |
+| `FORMSMITH_FORMS_HOST` | no | Serve public respondent forms on a separate host (e.g. a dedicated subdomain). Unset = everything on one host |
+| `FORMSMITH_ABUSE_CONTACT` | no | Email address for a "Report abuse" link on public forms. Unset = hidden |
 
 ## TLS and a domain (reverse proxy)
 
