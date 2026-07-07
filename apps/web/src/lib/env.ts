@@ -28,6 +28,9 @@ const envSchema = z.object({
   OPENAI_COMPAT_BASE_URL: z.string().optional(),
   OPENAI_COMPAT_API_KEY: z.string().optional(),
   OPENAI_COMPAT_MODEL: z.string().optional(),
+  /** Vercel AI Gateway key: one key reaches many models via `creator/model`
+   * slugs (set the slug in FORMSMITH_AI_MODEL). Takes precedence when set. */
+  AI_GATEWAY_API_KEY: z.string().optional(),
   FORMSMITH_AI_FALLBACK_PROVIDER: z.enum(['anthropic', 'openai-compatible']).optional(),
   FORMSMITH_AI_FALLBACK_API_KEY: z.string().optional(),
   FORMSMITH_AI_FALLBACK_MODEL: z.string().optional(),

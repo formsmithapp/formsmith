@@ -3,7 +3,7 @@
 
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { generateText, Output } from 'ai'
+import { createGateway, generateText, Output } from 'ai'
 import type { z } from 'zod'
 
 /**
@@ -57,6 +57,33 @@ export function createOpenAICompatProvider(
     async generateStructured({ schema, system, prompt, signal }) {
       const result = await generateText({
         model: client(model),
+        system,
+        prompt,
+        output: Output.object({ schema }),
+        abortSignal: signal,
+      })
+      return result.output
+    },
+  }
+}
+
+/** A safe fast default; the operator sets FORMSMITH_AI_MODEL to their chosen slug. */
+export const DEFAULT_GATEWAY_MODEL = 'anthropic/claude-haiku-4-5'
+
+/**
+ * Vercel AI Gateway provider: one key reaches many models via `creator/model`
+ * slugs. Same interface as the direct providers, so it drops straight into the
+ * hedge and the call sites. The slug is instance-level here (per-call model
+ * selection is a later layer).
+ */
+export function createGatewayProvider(apiKey: string, model?: string): ModelProvider {
+  const gw = createGateway({ apiKey })
+  const modelId = model ?? DEFAULT_GATEWAY_MODEL
+  return {
+    name: `gateway:${modelId}`,
+    async generateStructured({ schema, system, prompt, signal }) {
+      const result = await generateText({
+        model: gw(modelId),
         system,
         prompt,
         output: Output.object({ schema }),
@@ -212,18 +239,22 @@ export function resolveProviders(env: Record<string, string | undefined>): Model
     return withHedgedFallback(createMockProvider(), null, hedge)
   }
 
+  // Precedence: an explicit gateway key wins (the one-key-many-models path),
+  // then a bespoke OpenAI-compatible endpoint, then a direct Anthropic key.
   const primary =
-    env.OPENAI_COMPAT_BASE_URL !== undefined &&
-    env.OPENAI_COMPAT_API_KEY !== undefined &&
-    env.OPENAI_COMPAT_MODEL !== undefined
-      ? createOpenAICompatProvider(
-          env.OPENAI_COMPAT_BASE_URL,
-          env.OPENAI_COMPAT_API_KEY,
-          env.OPENAI_COMPAT_MODEL,
-        )
-      : env.ANTHROPIC_API_KEY !== undefined
-        ? createAnthropicProvider(env.ANTHROPIC_API_KEY, env.FORMSMITH_AI_MODEL)
-        : null
+    env.AI_GATEWAY_API_KEY !== undefined
+      ? createGatewayProvider(env.AI_GATEWAY_API_KEY, env.FORMSMITH_AI_MODEL)
+      : env.OPENAI_COMPAT_BASE_URL !== undefined &&
+          env.OPENAI_COMPAT_API_KEY !== undefined &&
+          env.OPENAI_COMPAT_MODEL !== undefined
+        ? createOpenAICompatProvider(
+            env.OPENAI_COMPAT_BASE_URL,
+            env.OPENAI_COMPAT_API_KEY,
+            env.OPENAI_COMPAT_MODEL,
+          )
+        : env.ANTHROPIC_API_KEY !== undefined
+          ? createAnthropicProvider(env.ANTHROPIC_API_KEY, env.FORMSMITH_AI_MODEL)
+          : null
   if (primary === null) return null
 
   const fb = env.FORMSMITH_AI_FALLBACK_PROVIDER

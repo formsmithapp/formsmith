@@ -16,9 +16,11 @@ export {
 export { sanitizeAnswer, validateQuestion } from './guard'
 export {
   createAnthropicProvider,
+  createGatewayProvider,
   createMockProvider,
   createOpenAICompatProvider,
   DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_GATEWAY_MODEL,
   type GenerateArgs,
   type HedgeOptions,
   type ModelProvider,

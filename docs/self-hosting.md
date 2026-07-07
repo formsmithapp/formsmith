@@ -54,7 +54,7 @@ never break** because a dependency is missing.
 | `FORMSMITH_PORT` | no | Host port for the app (default `3000`) |
 | `POSTGRES_PASSWORD` | recommended | Password for the bundled Postgres |
 | `DATABASE_URL` | no | Use an external Postgres instead of the bundled one |
-| `ANTHROPIC_API_KEY` *or* `OPENAI_COMPAT_*` | no | Bring your own LLM key; enables the AI interviewer and AI form generation. Unset = AI off, static fallback questions only |
+| `ANTHROPIC_API_KEY` *or* `OPENAI_COMPAT_*` *or* `AI_GATEWAY_API_KEY` | no | Bring your own LLM: a direct Anthropic key, any OpenAI-compatible endpoint, or a Vercel AI Gateway key (one key, many models; set the `creator/model` slug in `FORMSMITH_AI_MODEL`). Enables the AI interviewer and AI form generation. Unset = AI off, static fallback questions only |
 | `FORMSMITH_AI_FALLBACK_*` | no | Optional second model as a hedge: it fires if the primary hasn't answered within `FORMSMITH_AI_HEDGE_MS` (default 3000); first success wins |
 | `SMTP_URL` + `EMAIL_FROM` | no | Owner email notifications on new responses |
 | `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_CLIENT_ID/SECRET` | no | Social login buttons appear only when set |
