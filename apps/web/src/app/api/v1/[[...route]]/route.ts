@@ -5,7 +5,7 @@ import { InMemoryLruCache } from '@formsmithapp/adapters'
 import { resolveProviders } from '@formsmithapp/ai'
 import { createApi } from '@formsmithapp/api'
 import { handle } from 'hono/vercel'
-import { getAuth } from '@/lib/auth'
+import { emailVerificationRequired, getAuth } from '@/lib/auth'
 import { getDb } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
 import { getMail, getQueue } from '@/lib/workers'
@@ -21,8 +21,11 @@ function getHandler() {
       db: getDb(),
       getSession: async (headers) => {
         const session = await getAuth().api.getSession({ headers })
-        return session === null ? null : { userId: session.user.id }
+        return session === null
+          ? null
+          : { userId: session.user.id, emailVerified: session.user.emailVerified === true }
       },
+      requireVerifiedEmail: emailVerificationRequired(),
       queue: getQueue(),
       mail: getMail(),
       ai: provider === null ? undefined : { provider },

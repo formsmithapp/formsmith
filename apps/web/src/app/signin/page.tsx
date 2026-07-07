@@ -3,7 +3,7 @@
 
 import type { Metadata } from 'next'
 import { AuthScreen } from '@/components/auth-screen'
-import { enabledSocialProviders, signupDisabled } from '@/lib/auth'
+import { enabledSocialProviders, signupDisabled, turnstileSiteKey } from '@/lib/auth'
 
 export const metadata: Metadata = { title: 'Sign in · Formsmith' }
 
@@ -15,6 +15,7 @@ export default function SignInPage() {
       mode="signin"
       providers={enabledSocialProviders()}
       signupDisabled={signupDisabled()}
+      turnstileSiteKey={turnstileSiteKey()}
     />
   )
 }

@@ -12,13 +12,20 @@ import type { NextConfig } from 'next'
  * only in dev for react-refresh); img-src allows https anywhere because form
  * themes may point logoUrl at the author's own host.
  */
+// Turnstile (v0.1.5 §B) needs its script + widget iframe allow-listed. Only
+// widened when Turnstile is configured, so the self-host default CSP stays tight.
+const turnstileOn =
+  process.env.TURNSTILE_SECRET_KEY !== undefined && process.env.TURNSTILE_SITE_KEY !== undefined
+const cf = turnstileOn ? ' https://challenges.cloudflare.com' : ''
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}${cf}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data:",
   "font-src 'self'",
-  "connect-src 'self'",
+  `connect-src 'self'${cf}`,
+  `frame-src 'self'${cf}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

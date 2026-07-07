@@ -41,6 +41,7 @@ import {
 } from '@formsmithapp/schemas'
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, eq } from 'drizzle-orm'
+import type { Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { createMiddleware } from 'hono/factory'
 import { type ExchangeTuple, signExchange, verifyExchange } from './ai-sign'
@@ -58,7 +59,10 @@ import { WEBHOOK_RETRY } from './workers'
 export interface ApiDeps {
   db: Database
   /** Resolves the signed-in user from request headers (Better Auth in v1). */
-  getSession: (headers: Headers) => Promise<{ userId: string } | null>
+  getSession: (headers: Headers) => Promise<{ userId: string; emailVerified: boolean } | null>
+  /** Require a verified email to publish + use AI (v0.1.5). Off by default;
+   * when on, unverified SESSION accounts can still build/preview. */
+  requireVerifiedEmail?: boolean
   /** Background jobs (webhooks, notifications). Absent → integrations 503. */
   queue?: QueueAdapter
   mail?: MailAdapter
@@ -89,7 +93,7 @@ export interface ApiDeps {
 }
 
 interface Env {
-  Variables: { workspaceId: string; authVia: 'session' | 'key' }
+  Variables: { workspaceId: string; authVia: 'session' | 'key'; emailVerified: boolean }
 }
 
 /* ---------- response DTOs (they also document the spec) ---------- */
@@ -289,6 +293,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       if (workspaceId === null) return c.json({ error: 'no workspace' }, 403)
       c.set('workspaceId', workspaceId)
       c.set('authVia', 'session')
+      c.set('emailVerified', session.emailVerified)
       return next()
     }
     const header = c.req.header('authorization')
@@ -300,6 +305,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         if (await overLimit('key', key.id, 600, 60)) return c.json({ error: 'rate limited' }, 429)
         c.set('workspaceId', key.workspaceId)
         c.set('authVia', 'key')
+        // an API key is a deliberate credential; the verified gate is for the
+        // interactive session surface, so key auth is treated as verified
+        c.set('emailVerified', true)
         // metrics/telemetry must never fail a request
         void apiKeys.touchLastUsed(key.id).catch(() => {})
         void apiKeys.recordUsage(key.id, todayUtc()).catch(() => {})
@@ -317,8 +325,22 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     if (workspaceId === null) return c.json({ error: 'no workspace' }, 403)
     c.set('workspaceId', workspaceId)
     c.set('authVia', 'session')
+    c.set('emailVerified', session.emailVerified)
     await next()
   })
+
+  /**
+   * The verified-email soft gate (v0.1.5 §B). Only bites when the instance
+   * requires verification AND this is an unverified interactive session; API
+   * keys and the verification-off default sail through. Returns a 403 body to
+   * send, or null to proceed.
+   */
+  const verifiedGate = (c: Context<Env>): { error: string } | null =>
+    deps.requireVerifiedEmail === true &&
+    c.get('authVia') === 'session' &&
+    c.get('emailVerified') !== true
+      ? { error: 'email_not_verified' }
+      : null
 
   /** Published-snapshot reads, cached. Version-pinned docs are immutable
    * (long TTL, no invalidation); the latest-pointer lives 60 s — the same
@@ -840,11 +862,14 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       request: { params: idParam },
       responses: {
         200: jsonResponse(z.object({ version: z.number() }), 'Published version'),
+        403: jsonResponse(errorDto, 'Email verification required'),
         404: jsonResponse(errorDto, 'Not found in this workspace'),
         422: jsonResponse(errorDto, 'The document failed validation'),
       },
     }),
     async (c) => {
+      const gate = verifiedGate(c)
+      if (gate !== null) return c.json(gate, 403)
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
       const row = await forms.get(c.get('workspaceId'), id)
@@ -1142,6 +1167,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       },
     }),
     async (c) => {
+      // gated too, so an unverified account cannot mint a key to publish with
+      const gate = verifiedGate(c)
+      if (gate !== null) return c.json(gate, 403)
       const workspaceId = c.get('workspaceId')
       if (atQuota(await apiKeys.count(workspaceId), deps.quotas?.apiKeysPerWorkspace)) {
         return c.json(quotaError('api_keys'), 403)
@@ -1328,6 +1356,8 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     }),
     async (c) => {
       if (c.get('authVia') !== 'session') return c.json({ error: 'session required' }, 403)
+      const gate = verifiedGate(c)
+      if (gate !== null) return c.json(gate, 403)
       if (deps.ai === undefined) return c.json({ error: 'ai not configured' }, 503)
       const workspaceId = c.get('workspaceId')
       if (await overLimit('generate', workspaceId, 10, 3_600)) {
@@ -1361,7 +1391,11 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       summary: 'Instance capabilities (drives UI hints)',
       responses: {
         200: jsonResponse(
-          z.object({ mailConfigured: z.boolean(), aiConfigured: z.boolean() }),
+          z.object({
+            mailConfigured: z.boolean(),
+            aiConfigured: z.boolean(),
+            verificationRequired: z.boolean(),
+          }),
           'Capabilities',
         ),
       },
@@ -1371,6 +1405,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         {
           mailConfigured: deps.mail?.configured ?? false,
           aiConfigured: deps.ai !== undefined,
+          verificationRequired: deps.requireVerifiedEmail === true,
         },
         200,
       ),

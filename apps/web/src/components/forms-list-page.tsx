@@ -13,12 +13,16 @@ import { BrandMark } from '@/components/brand-mark'
 import { ImportBanner } from '@/components/import-banner'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
+import { VerifyEmailBanner } from '@/components/verify-email-banner'
 import { getRepository } from '@/lib/repository/client'
 
 /** Turn the API's terse error codes into a friendly line for the AI prompt box. */
 function friendlyGenerateError(status: number, body: { error?: string; resource?: string } | null) {
   if (status === 403 && body?.error === 'ai_credits_exhausted') {
     return "You're out of AI credits, so generation is paused. Your existing forms keep working."
+  }
+  if (status === 403 && body?.error === 'email_not_verified') {
+    return 'Verify your email to generate forms with AI. Check your inbox for the confirmation link.'
   }
   if (status === 403 && body?.error === 'quota_exceeded' && body.resource === 'forms') {
     return "You've reached the form limit for this workspace."
@@ -52,7 +56,11 @@ export function FormsListPage() {
   // AI form generation — visible only when the instance has a provider
   const meta = useQuery({
     queryKey: ['meta'],
-    queryFn: async () => (await (await fetch('/api/v1/meta')).json()) as { aiConfigured: boolean },
+    queryFn: async () =>
+      (await (await fetch('/api/v1/meta')).json()) as {
+        aiConfigured: boolean
+        verificationRequired: boolean
+      },
     staleTime: 300_000,
   })
   const [aiPrompt, setAiPrompt] = useState('')
@@ -118,6 +126,8 @@ export function FormsListPage() {
           <Plus size={15} /> New form
         </button>
       </div>
+
+      <VerifyEmailBanner required={meta.data?.verificationRequired === true} />
 
       <ImportBanner />
 

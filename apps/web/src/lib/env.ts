@@ -39,6 +39,14 @@ const envSchema = z.object({
   /** Self-host toggles — truthy values: 'true' | '1'. */
   FORMSMITH_HIDE_BADGE: z.string().optional(),
   FORMSMITH_DISABLE_SIGNUP: z.string().optional(),
+  /** Require a verified email to publish + use AI credits (v0.1.5). Off by
+   * default: a fresh self-host with no SMTP must not lock the owner out. */
+  FORMSMITH_REQUIRE_EMAIL_VERIFICATION: z.string().optional(),
+  /** Cloudflare Turnstile on signup/signin. Both set = on; unset = off (OSS
+   * default, zero new deps). Site key is public (passed to the client at
+   * runtime, never NEXT_PUBLIC, so one image serves any instance). */
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+  TURNSTILE_SITE_KEY: z.string().optional(),
   /** Lets webhook deliveries reach private/loopback addresses (e.g. n8n on the same box). */
   WEBHOOK_ALLOW_PRIVATE: z.string().optional(),
   /** Public submit endpoint rate limit per ip+form, per minute. Default 60. */

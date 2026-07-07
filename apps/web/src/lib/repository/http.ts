@@ -68,11 +68,13 @@ export class HttpFormsRepository implements FormsRepository {
   }
 
   async publish(id: string): Promise<{ version: number }> {
-    const { status, body } = await request<{ version: number } & { issues?: string[] }>(
-      `/forms/${id}/publish`,
-      { method: 'POST' },
-    )
+    const { status, body } = await request<
+      { version: number } & { issues?: string[]; error?: string }
+    >(`/forms/${id}/publish`, { method: 'POST' })
     if (status === 422) throw new PublishValidationError(body?.issues ?? ['invalid form'])
+    if (status === 403 && body?.error === 'email_not_verified') {
+      throw new Error('Verify your email to publish. Check your inbox for the confirmation link.')
+    }
     if (status !== 200) throw new Error(`publish failed (${status})`)
     return { version: body.version }
   }

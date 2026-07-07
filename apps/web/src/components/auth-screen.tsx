@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { authClient } from '@/lib/auth-client'
 import { BrandMark } from './brand-mark'
+import { Turnstile } from './turnstile'
 
 export interface SocialProviders {
   google: boolean
@@ -26,11 +27,14 @@ export function AuthScreen({
   mode,
   providers,
   signupDisabled = false,
+  turnstileSiteKey = null,
 }: {
   mode: 'signin' | 'signup'
   providers: SocialProviders
   /** FORMSMITH_DISABLE_SIGNUP — registration is closed on this instance. */
   signupDisabled?: boolean
+  /** Cloudflare Turnstile site key — set = show the widget, gate submit. */
+  turnstileSiteKey?: string | null
 }) {
   const router = useRouter()
   const [name, setName] = useState('')
@@ -38,8 +42,10 @@ export function AuthScreen({
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const signup = mode === 'signup'
   const anySocial = providers.google || providers.github
+  const captchaPending = turnstileSiteKey !== null && captchaToken === null
 
   if (signup && signupDisabled) {
     return (
@@ -76,12 +82,16 @@ export function AuthScreen({
     event.preventDefault()
     setError(null)
     setBusy(true)
+    // forward the Turnstile token as the header the captcha plugin verifies
+    const fetchOptions =
+      captchaToken !== null ? { headers: { 'x-captcha-response': captchaToken } } : undefined
     const result = signup
-      ? await authClient.signUp.email({ name, email, password })
-      : await authClient.signIn.email({ email, password })
+      ? await authClient.signUp.email({ name, email, password, fetchOptions })
+      : await authClient.signIn.email({ email, password, fetchOptions })
     setBusy(false)
     if (result.error) {
-      setError(result.error.message ?? 'Something went wrong — try again.')
+      setError(result.error.message ?? 'Something went wrong, try again.')
+      setCaptchaToken(null) // a token is single-use; force a fresh challenge
       return
     }
     router.push('/')
@@ -151,9 +161,12 @@ export function AuthScreen({
                 {error}
               </p>
             )}
+            {turnstileSiteKey !== null && (
+              <Turnstile siteKey={turnstileSiteKey} onToken={setCaptchaToken} />
+            )}
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || captchaPending}
               className="flex w-full items-center justify-center gap-2 rounded-[9px] bg-brand px-4 py-2.5 text-[14px] font-semibold text-on-brand shadow-sm transition-transform duration-100 ease-spring hover:bg-brand-strong active:scale-[0.98] disabled:opacity-60"
             >
               {busy && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}

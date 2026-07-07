@@ -62,6 +62,7 @@ const quizDoc = (): FormDefinition => ({
 
 let db: Database
 let currentUser: string | null
+let currentVerified = true
 let app: ReturnType<typeof createApi>
 let queue: InMemoryQueue
 
@@ -87,10 +88,12 @@ beforeEach(async () => {
   await createWorkspaceWithOwner(db, 'alice', "Alice's workspace")
   await createWorkspaceWithOwner(db, 'mallory', "Mallory's workspace")
   currentUser = 'alice'
+  currentVerified = true
   queue = new InMemoryQueue()
   app = createApi({
     db,
-    getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+    getSession: async () =>
+      currentUser === null ? null : { userId: currentUser, emailVerified: currentVerified },
     queue,
     ai: { provider: createMockProvider() },
     signingSecret: 'test-signing-secret',
@@ -863,7 +866,8 @@ describe('S5b: the cache layer', () => {
     }
     const brokenApp = createApi({
       db,
-      getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+      getSession: async () =>
+        currentUser === null ? null : { userId: currentUser, emailVerified: currentVerified },
       cache: poisoned,
     })
 
@@ -908,7 +912,8 @@ describe('quotas + AI credits (v0.1.5)', () => {
   const apiWith = (quotas: ApiDeps['quotas']) =>
     createApi({
       db,
-      getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+      getSession: async () =>
+        currentUser === null ? null : { userId: currentUser, emailVerified: currentVerified },
       queue,
       ai: { provider: createMockProvider() },
       signingSecret: 'test-signing-secret',
@@ -1048,5 +1053,86 @@ describe('quotas + AI credits (v0.1.5)', () => {
     for (let i = 0; i < 3; i += 1) {
       expect((await q.request('/api/v1/forms', json({ doc: quizDoc() }))).status).toBe(201)
     }
+  })
+})
+
+describe('email verification gate (v0.1.5 B)', () => {
+  const verifyingApi = () =>
+    createApi({
+      db,
+      getSession: async () =>
+        currentUser === null ? null : { userId: currentUser, emailVerified: currentVerified },
+      queue,
+      ai: { provider: createMockProvider() },
+      signingSecret: 'test-signing-secret',
+      requireVerifiedEmail: true,
+    })
+
+  async function draftOn(q: ReturnType<typeof createApi>): Promise<string> {
+    const { form } = (await (
+      await q.request('/api/v1/forms', json({ doc: quizDoc() }))
+    ).json()) as {
+      form: FormDefinition
+    }
+    return form.id
+  }
+
+  it('unverified session can build but cannot publish, generate, or mint a key', async () => {
+    const q = verifyingApi()
+    currentVerified = false
+    const id = await draftOn(q) // building is open to unverified accounts
+
+    const pub = await q.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+    expect(pub.status).toBe(403)
+    expect(await pub.json()).toEqual({ error: 'email_not_verified' })
+    expect((await q.request('/api/v1/forms/generate', json({ prompt: 'a form' }))).status).toBe(403)
+    expect((await q.request('/api/v1/api-keys', json({ name: 'k' }))).status).toBe(403)
+  })
+
+  it('verified session sails through publish + key mint', async () => {
+    const q = verifyingApi()
+    currentVerified = true
+    const id = await draftOn(q)
+    expect((await q.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })).status).toBe(200)
+    expect((await q.request('/api/v1/api-keys', json({ name: 'k' }))).status).toBe(201)
+  })
+
+  it('with verification OFF (the default), an unverified account can publish', async () => {
+    currentVerified = false // the default `app` has requireVerifiedEmail unset
+    const id = await createForm()
+    expect((await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })).status).toBe(200)
+  })
+
+  it('an API key bypasses the gate (deliberate credential, verified at mint time)', async () => {
+    const q = verifyingApi()
+    currentVerified = true
+    const secret = (
+      (await (await q.request('/api/v1/api-keys', json({ name: 'ci' }))).json()) as {
+        secret: string
+      }
+    ).secret
+    const id = await draftOn(q)
+
+    currentVerified = false
+    currentUser = null // force the bearer path
+    const pub = await q.request(`/api/v1/forms/${id}/publish`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${secret}` },
+    })
+    expect(pub.status).toBe(200)
+  })
+
+  it('/meta reports whether verification is required', async () => {
+    expect(
+      (
+        (await (await verifyingApi().request('/api/v1/meta')).json()) as {
+          verificationRequired: boolean
+        }
+      ).verificationRequired,
+    ).toBe(true)
+    expect(
+      ((await (await app.request('/api/v1/meta')).json()) as { verificationRequired: boolean })
+        .verificationRequired,
+    ).toBe(false)
   })
 })
