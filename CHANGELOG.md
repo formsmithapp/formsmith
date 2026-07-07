@@ -14,6 +14,44 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.5], 2026-07-07
+
+Optional metering, signup hardening, and abuse controls. Everything here is off by default and
+env-configured, so a self-hosted instance behaves exactly as before unless you opt in. Upgrading
+applies two new database migrations automatically on boot (back up first, as always).
+
+### Added
+
+- AI credits and usage quotas, all env-configured and unlimited by default:
+  - AI credits per workspace (`FORMSMITH_AI_CREDITS_DEFAULT`), metered against AI follow-ups and
+    form generation. When credits run out, AI follow-ups degrade to the static fallback question
+    and generation returns a friendly message. No form ever breaks.
+  - Caps on forms per workspace, responses per form per month, webhooks per form, and API keys per
+    workspace (`FORMSMITH_LIMIT_*`). Over a cap, the action returns a clear error; a form at its
+    monthly response cap tells respondents it is no longer accepting responses.
+- Optional email verification (`FORMSMITH_REQUIRE_EMAIL_VERIFICATION`, off by default). When on,
+  publishing a form and using AI require a verified email, while building and previewing stay open.
+  It uses your SMTP; if mail is not configured it is not enforced and logs a warning, so you can
+  never be locked out of your own instance.
+- Optional Cloudflare Turnstile on sign-up and sign-in (`TURNSTILE_SECRET_KEY` +
+  `TURNSTILE_SITE_KEY`, both required, off by default).
+- Option to serve public respondent forms on a separate host (`FORMSMITH_FORMS_HOST`); unset keeps
+  everything on one host.
+- Abuse kill switch: suspend a single form or a whole workspace to stop it serving and accepting
+  responses immediately (flip via SQL; no admin UI yet). Plus an optional "Report abuse" link on
+  public forms (`FORMSMITH_ABUSE_CONTACT`).
+
+### Changed
+
+- Cross-tenant hardening: requesting another workspace's response list now returns 404 instead of
+  an empty list, so every responses endpoint behaves consistently. A focused test suite proves each
+  authenticated endpoint rejects cross-workspace access.
+
+### Fixed
+
+- The workspace header no longer shifts sideways when a page grows tall enough to add a scrollbar
+  (the scrollbar gutter is now reserved).
+
 ## [0.1.4], 2026-07-07
 
 Results and the responses API now scale to forms with tens of thousands of submissions,
@@ -141,7 +179,8 @@ The first public release. The whole product runs on two containers
   submit path fast under load.
 - **No telemetry or analytics of any kind**, a self-hosted instance never phones home.
 
-[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/formsmithapp/formsmith/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/formsmithapp/formsmith/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/formsmithapp/formsmith/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/formsmithapp/formsmith/compare/v0.1.1...v0.1.2
