@@ -17,6 +17,11 @@ export {
   webhooksRepository,
 } from './repositories/connect'
 export {
+  type CreditState,
+  type CreditsDbRepository,
+  creditsRepository,
+} from './repositories/credits'
+export {
   type FormRow,
   type FormsDbRepository,
   formsRepository,

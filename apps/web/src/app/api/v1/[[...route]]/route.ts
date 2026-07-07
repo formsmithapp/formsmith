@@ -30,6 +30,15 @@ function getHandler() {
       submitRatePerMinute: serverEnv().FORMSMITH_SUBMIT_RATE,
       // v1.1: REDIS_URL swaps this for a RedisCache behind the same interface
       cache: new InMemoryLruCache(serverEnv().FORMSMITH_CACHE_MAX_ITEMS ?? 500),
+      // v0.1.5 quotas: every value unset = unlimited (self-host default)
+      quotas: {
+        aiCreditsDefault: serverEnv().FORMSMITH_AI_CREDITS_DEFAULT,
+        aiGenerationCost: serverEnv().FORMSMITH_AI_GENERATION_COST,
+        forms: serverEnv().FORMSMITH_LIMIT_FORMS,
+        responsesPerMonth: serverEnv().FORMSMITH_LIMIT_RESPONSES_MONTH,
+        webhooksPerForm: serverEnv().FORMSMITH_LIMIT_WEBHOOKS,
+        apiKeysPerWorkspace: serverEnv().FORMSMITH_LIMIT_API_KEYS,
+      },
     })
     handler = handle(api)
   }

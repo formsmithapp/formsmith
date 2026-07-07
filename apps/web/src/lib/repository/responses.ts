@@ -84,6 +84,20 @@ export class SubmissionRejectedError extends Error {
   }
 }
 
+/**
+ * The form has permanently stopped accepting responses (monthly cap reached).
+ * `terminal` is the flag the renderer's retry queue reads to go straight to the
+ * closed state instead of retrying a submission the server will never accept.
+ */
+export class FormClosedError extends Error {
+  readonly terminal = true
+
+  constructor() {
+    super('This form is no longer accepting responses')
+    this.name = 'FormClosedError'
+  }
+}
+
 export interface ListOptions {
   /** Opaque keyset cursor from a previous page's `nextCursor`. */
   cursor?: string

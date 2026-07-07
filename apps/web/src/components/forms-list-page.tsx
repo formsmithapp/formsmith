@@ -15,6 +15,18 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
 import { getRepository } from '@/lib/repository/client'
 
+/** Turn the API's terse error codes into a friendly line for the AI prompt box. */
+function friendlyGenerateError(status: number, body: { error?: string; resource?: string } | null) {
+  if (status === 403 && body?.error === 'ai_credits_exhausted') {
+    return "You're out of AI credits, so generation is paused. Your existing forms keep working."
+  }
+  if (status === 403 && body?.error === 'quota_exceeded' && body.resource === 'forms') {
+    return "You've reached the form limit for this workspace."
+  }
+  if (status === 503) return "AI isn't configured on this instance."
+  return body?.error ?? `generation failed (${status})`
+}
+
 export function FormsListPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -52,8 +64,11 @@ export function FormsListPage() {
         body: JSON.stringify({ prompt }),
       })
       if (res.status !== 201) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null
-        throw new Error(body?.error ?? `generation failed (${res.status})`)
+        const body = (await res.json().catch(() => null)) as {
+          error?: string
+          resource?: string
+        } | null
+        throw new Error(friendlyGenerateError(res.status, body))
       }
       return (await res.json()) as { form: FormDefinition }
     },

@@ -102,3 +102,36 @@ export const responses = pgTable(
     uniqueIndex('responses_id_form_idx').on(table.id, table.formId),
   ],
 )
+
+/**
+ * AI credit ledger (v0.1.5). One row per workspace, present ONLY when the
+ * instance sets `FORMSMITH_AI_CREDITS_DEFAULT` (self-host default: unset =
+ * unlimited, no row, feature off). The row is lazily ensured on the first
+ * charge and decremented atomically; billing state must fail CLOSED, so this
+ * lives in Postgres, never the fail-open cache.
+ */
+export const workspaceAiCredits = pgTable('workspace_ai_credits', {
+  workspaceId: uuid('workspace_id')
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  remaining: integer('remaining').notNull(),
+  granted: integer('granted').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * Per-form monthly response counter (v0.1.5). Upsert-incremented inside the
+ * submit transaction to enforce `FORMSMITH_LIMIT_RESPONSES_MONTH`; the bucket
+ * shape mirrors `api_key_usage`. `month` is a 'YYYY-MM' UTC string.
+ */
+export const formUsage = pgTable(
+  'form_usage',
+  {
+    formId: uuid('form_id')
+      .notNull()
+      .references(() => forms.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(),
+    responses: integer('responses').notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.formId, table.month] })],
+)

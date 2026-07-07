@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { and, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm'
 import type { Database } from '../client'
 import { apiKeys, apiKeyUsage, forms, webhookDeliveries, webhooks } from '../schema'
 
@@ -60,6 +60,15 @@ export function apiKeysRepository(db: Database) {
         .from(apiKeys)
         .where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt)))
         .orderBy(desc(apiKeys.createdAt))
+    },
+
+    /** Active (non-revoked) key count for FORMSMITH_LIMIT_API_KEYS on create. */
+    async count(workspaceId: string): Promise<number> {
+      const [row] = await db
+        .select({ n: count() })
+        .from(apiKeys)
+        .where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt)))
+      return row?.n ?? 0
     },
 
     async revoke(workspaceId: string, keyId: string): Promise<boolean> {
@@ -192,6 +201,15 @@ export function webhooksRepository(db: Database) {
         .where(scopedWebhook(workspaceId, formId, webhookId))
         .limit(1)
       return rows[0]?.webhook ?? null
+    },
+
+    /** Webhook count for a form (FORMSMITH_LIMIT_WEBHOOKS on create). */
+    async count(formId: string): Promise<number> {
+      const [row] = await db
+        .select({ n: count() })
+        .from(webhooks)
+        .where(eq(webhooks.formId, formId))
+      return row?.n ?? 0
     },
 
     async remove(workspaceId: string, formId: string, webhookId: string): Promise<boolean> {

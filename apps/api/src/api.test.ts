@@ -5,12 +5,18 @@ import { dirname, join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { InMemoryQueue } from '@formsmithapp/adapters'
 import { createMockProvider } from '@formsmithapp/ai'
-import { createWorkspaceWithOwner, type Database, schema } from '@formsmithapp/db'
+import {
+  createWorkspaceWithOwner,
+  creditsRepository,
+  type Database,
+  schema,
+  workspaceForUser,
+} from '@formsmithapp/db'
 import type { FormDefinition } from '@formsmithapp/engine'
 import { drizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createApi } from './index'
+import { type ApiDeps, createApi } from './index'
 
 const require = createRequire(import.meta.url)
 
@@ -893,5 +899,154 @@ describe('S5b: the cache layer', () => {
     expect(ok2.status).toBe(201)
     const body = (await ok2.json()) as { variables: Record<string, unknown> }
     expect(body.variables).toEqual({ score: 10 }) // recomputed, not cached
+  })
+})
+
+describe('quotas + AI credits (v0.1.5)', () => {
+  // a second app over the SAME db/session, but with strict quota values (hosted
+  // is just this with real numbers). The default `app` has none = unlimited.
+  const apiWith = (quotas: ApiDeps['quotas']) =>
+    createApi({
+      db,
+      getSession: async () => (currentUser === null ? null : { userId: currentUser }),
+      queue,
+      ai: { provider: createMockProvider() },
+      signingSecret: 'test-signing-secret',
+      quotas,
+    })
+
+  const aiForm = (): FormDefinition => ({
+    id: 'seed',
+    title: 'Interview',
+    blocks: [
+      { id: 'b_w', ref: 'welcome', type: 'welcome', title: 'Hi', required: false },
+      {
+        id: 'b_ai',
+        ref: 'experience',
+        type: 'ai_followup',
+        title: 'Tell me about your setup.',
+        required: true,
+        properties: { goal: 'friction', maxFollowups: 2, fallbackQuestion: 'Hardest part?' },
+      },
+      { id: 'b_end', ref: 'thanks', type: 'thankyou', title: 'Bye', required: false },
+    ],
+    logic: [],
+    variables: [],
+    settings: {},
+  })
+
+  it('forms quota: create up to the limit, then 403', async () => {
+    const q = apiWith({ forms: 1 })
+    expect((await q.request('/api/v1/forms', json({ doc: quizDoc() }))).status).toBe(201)
+    const over = await q.request('/api/v1/forms', json({ doc: quizDoc() }))
+    expect(over.status).toBe(403)
+    expect(await over.json()).toEqual({ error: 'quota_exceeded', resource: 'forms' })
+  })
+
+  it('API-key quota: create up to the limit, then 403', async () => {
+    const q = apiWith({ apiKeysPerWorkspace: 1 })
+    expect((await q.request('/api/v1/api-keys', json({ name: 'a' }))).status).toBe(201)
+    expect((await q.request('/api/v1/api-keys', json({ name: 'b' }))).status).toBe(403)
+  })
+
+  it('webhook quota is per form: create up to the limit, then 403', async () => {
+    const q = apiWith({ webhooksPerForm: 1 })
+    const { form } = (await (
+      await q.request('/api/v1/forms', json({ doc: quizDoc() }))
+    ).json()) as {
+      form: FormDefinition
+    }
+    const first = await q.request(
+      `/api/v1/forms/${form.id}/webhooks`,
+      json({ url: 'https://a.test/1' }),
+    )
+    expect(first.status).toBe(201)
+    const over = await q.request(
+      `/api/v1/forms/${form.id}/webhooks`,
+      json({ url: 'https://a.test/2' }),
+    )
+    expect(over.status).toBe(403)
+    expect(await over.json()).toEqual({ error: 'quota_exceeded', resource: 'webhooks' })
+  })
+
+  it('monthly response cap: at the cap the form closes, nothing is stored', async () => {
+    const q = apiWith({ responsesPerMonth: 1 })
+    const { form } = (await (
+      await q.request('/api/v1/forms', json({ doc: quizDoc() }))
+    ).json()) as {
+      form: FormDefinition
+    }
+    await q.request(`/api/v1/forms/${form.id}/publish`, { method: 'POST' })
+
+    currentUser = null // respondent
+    expect(
+      (await q.request(`/api/v1/f/${form.id}/responses`, json({ answers: { plan: 'pro' } })))
+        .status,
+    ).toBe(201)
+    const closed = await q.request(
+      `/api/v1/f/${form.id}/responses`,
+      json({ answers: { plan: 'pro' } }),
+    )
+    expect(closed.status).toBe(403)
+    expect(await closed.json()).toEqual({ error: 'form_over_capacity' })
+
+    currentUser = 'alice'
+    const list = (await (await q.request(`/api/v1/forms/${form.id}/responses`)).json()) as {
+      responses: unknown[]
+    }
+    expect(list.responses).toHaveLength(1) // the rejected one never landed
+  })
+
+  it('AI generation: exhausted credits return a friendly 403 (no provider call)', async () => {
+    const q = apiWith({ aiCreditsDefault: 0 }) // zero balance from the start
+    const res = await q.request('/api/v1/forms/generate', json({ prompt: 'a signup form' }))
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'ai_credits_exhausted' })
+  })
+
+  it('AI exchange: a live credit is spent; exhaustion degrades to the fallback', async () => {
+    const workspaceId = (await workspaceForUser(db, 'alice'))?.id ?? ''
+    const credits = creditsRepository(db)
+
+    // one credit available: the first exchange spends it and asks a real question
+    const q = apiWith({ aiCreditsDefault: 1 })
+    const { form } = (await (await q.request('/api/v1/forms', json({ doc: aiForm() }))).json()) as {
+      form: FormDefinition
+    }
+    await q.request(`/api/v1/forms/${form.id}/publish`, { method: 'POST' })
+    currentUser = null
+
+    const live = (await (
+      await q.request(
+        `/api/v1/f/${form.id}/ai`,
+        json({
+          ref: 'experience',
+          index: 1,
+          baseAnswer: 'SMTP kept failing on my box',
+          exchanges: [],
+        }),
+      )
+    ).json()) as { done: boolean; meta: Record<string, unknown> }
+    expect(live.done).toBe(false)
+    expect(live.meta.fallback).toBe(false) // a real model question
+    expect(await credits.get(workspaceId)).toEqual({ remaining: 0, granted: 1 }) // spent
+
+    // now exhausted: the next exchange degrades to the static fallback, audited
+    const degraded = (await (
+      await q.request(
+        `/api/v1/f/${form.id}/ai`,
+        json({ ref: 'experience', index: 1, baseAnswer: 'more detail', exchanges: [] }),
+      )
+    ).json()) as { done: boolean; question?: string; meta?: Record<string, unknown> }
+    expect(degraded.question).toBe('Hardest part?')
+    expect(degraded.meta?.fallback).toBe(true)
+    expect(degraded.meta?.reason).toBe('credits_exhausted')
+  })
+
+  it('generous limits are never hit (unset stays unlimited)', async () => {
+    const q = apiWith({ forms: 100, apiKeysPerWorkspace: 100 })
+    for (let i = 0; i < 3; i += 1) {
+      expect((await q.request('/api/v1/forms', json({ doc: quizDoc() }))).status).toBe(201)
+    }
   })
 })

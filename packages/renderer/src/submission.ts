@@ -33,7 +33,21 @@ export interface SubmissionPayload {
 
 export type SubmitFn = (payload: SubmissionPayload) => Promise<void> | void
 
-export type QueueStatus = 'idle' | 'sending' | 'sent' | 'retrying' | 'failed'
+export type QueueStatus = 'idle' | 'sending' | 'sent' | 'retrying' | 'failed' | 'closed'
+
+/**
+ * A submit rejection the queue must NOT retry: the server has permanently
+ * refused this response (e.g. the form hit its monthly cap). By convention the
+ * transport throws an error carrying `terminal: true`; the queue then goes to
+ * the terminal 'closed' status instead of burning retries on a lost cause.
+ */
+export function isTerminalRejection(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { terminal?: unknown }).terminal === true
+  )
+}
 
 export interface RetryQueue {
   push(payload: SubmissionPayload): void
@@ -79,7 +93,13 @@ export function createRetryQueue(submit: SubmitFn): RetryQueue {
       await submit(pending)
       pending = null
       setStatus('sent')
-    } catch {
+    } catch (error) {
+      // permanent refusal (e.g. the form is closed): stop, never retry
+      if (isTerminalRejection(error)) {
+        pending = null
+        setStatus('closed')
+        return
+      }
       attempt += 1
       // Bounded automatic retry: after MAX_ATTEMPTS we stop the loop and go
       // terminal so the respondent sees a clear failure (and a manual retry)

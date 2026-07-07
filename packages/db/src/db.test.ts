@@ -3,6 +3,8 @@
 import type { FormDefinition } from '@formsmithapp/engine'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from './client'
+import { apiKeysRepository, webhooksRepository } from './repositories/connect'
+import { creditsRepository } from './repositories/credits'
 import { formsRepository } from './repositories/forms'
 import { responsesRepository } from './repositories/responses'
 import { createWorkspaceWithOwner, workspaceForUser } from './repositories/workspaces'
@@ -219,5 +221,72 @@ describe('responses repository', () => {
       seen.push(...batch.map((r) => r.answers.name as string))
     }
     expect(seen).toEqual(['r6', 'r5', 'r4', 'r3', 'r2', 'r1', 'r0'])
+  })
+})
+
+describe('credits + quotas (v0.1.5)', () => {
+  it('AI credits: lazy grant on first charge, atomic decrement, exhaustion', async () => {
+    const credits = creditsRepository(db)
+    // first charge ensures the row at the grant (3), then spends 1
+    expect(await credits.charge(wsA.id, 1, 3)).toBe(2)
+    expect(await credits.charge(wsA.id, 1, 3)).toBe(1) // grant ignored once the row exists
+    expect(await credits.charge(wsA.id, 1, 3)).toBe(0)
+    expect(await credits.charge(wsA.id, 1, 3)).toBeNull() // exhausted: 0 < 1, nothing spent
+    expect(await credits.get(wsA.id)).toEqual({ remaining: 0, granted: 3 })
+
+    // a cost larger than the balance spends nothing (the row is still ensured)
+    expect(await credits.charge(wsB.id, 5, 3)).toBeNull()
+    expect(await credits.get(wsB.id)).toEqual({ remaining: 3, granted: 3 })
+
+    // no ledger row → null (the unlimited path never calls charge)
+    const fresh = await createWorkspaceWithOwner(db, await createTestUser(db, 'cara'), 'Cara')
+    expect(await credits.get(fresh.id)).toBeNull()
+  })
+
+  it('monthly response cap: upsert-increment, reject + roll back over cap', async () => {
+    const formsRepo = formsRepository(db)
+    const repo = responsesRepository(db)
+    const created = await formsRepo.create(wsA.id, doc())
+    await formsRepo.publish(wsA.id, created.id)
+    const base = { formId: created.id, formVersion: 1, variables: {}, hidden: {}, ending: null }
+    const month = '2026-07'
+
+    expect(
+      (await repo.insertMetered({ ...base, answers: { n: 1 } }, { monthlyCap: 2, month })).ok,
+    ).toBe(true)
+    expect(
+      (await repo.insertMetered({ ...base, answers: { n: 2 } }, { monthlyCap: 2, month })).ok,
+    ).toBe(true)
+    const third = await repo.insertMetered({ ...base, answers: { n: 3 } }, { monthlyCap: 2, month })
+    expect(third.ok).toBe(false)
+    // exactly 2 stored — the 3rd rolled back, and the counter did not advance
+    expect((await repo.list(wsA.id, created.id)).responses).toHaveLength(2)
+
+    // a fresh month starts the count over
+    expect(
+      (
+        await repo.insertMetered(
+          { ...base, answers: { n: 4 } },
+          { monthlyCap: 2, month: '2026-08' },
+        )
+      ).ok,
+    ).toBe(true)
+    // null cap = unlimited plain insert
+    expect(
+      (await repo.insertMetered({ ...base, answers: { n: 5 } }, { monthlyCap: null, month })).ok,
+    ).toBe(true)
+    expect((await repo.list(wsA.id, created.id)).responses).toHaveLength(4)
+  })
+
+  it('count helpers back the create-time quotas', async () => {
+    const formsRepo = formsRepository(db)
+    expect(await formsRepo.count(wsA.id)).toBe(0)
+    const f = await formsRepo.create(wsA.id, doc())
+    expect(await formsRepo.count(wsA.id)).toBe(1)
+    expect(await formsRepo.count(wsB.id)).toBe(0) // scoped
+    expect(await formsRepo.workspaceOf(f.id)).toBe(wsA.id)
+    expect(await formsRepo.workspaceOf(crypto.randomUUID())).toBeNull()
+    expect(await webhooksRepository(db).count(f.id)).toBe(0)
+    expect(await apiKeysRepository(db).count(wsA.id)).toBe(0)
   })
 })

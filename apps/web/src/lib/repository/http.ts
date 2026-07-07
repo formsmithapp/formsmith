@@ -4,6 +4,7 @@
 import type { FormDefinition } from '@formsmithapp/engine'
 import { starterForm } from '../seed'
 import {
+  FormClosedError,
   type ListOptions,
   type ResponsePage,
   type ResponsePayload,
@@ -100,7 +101,10 @@ export class HttpResponsesRepository implements ResponsesRepository {
   async add(payload: ResponsePayload): Promise<StoredResponse> {
     // the PUBLIC submit path — the server re-evaluates against the pinned snapshot
     const { status, body } = await request<
-      StoredResponse & { issues?: import('@formsmithapp/engine').SubmissionIssue[] }
+      StoredResponse & {
+        issues?: import('@formsmithapp/engine').SubmissionIssue[]
+        error?: string
+      }
     >(`/f/${payload.formId}/responses`, {
       method: 'POST',
       body: JSON.stringify({
@@ -113,6 +117,8 @@ export class HttpResponsesRepository implements ResponsesRepository {
       }),
     })
     if (status === 422) throw new SubmissionRejectedError(body?.issues ?? [])
+    // monthly cap reached: a permanent refusal the retry queue must not retry
+    if (status === 403 && body?.error === 'form_over_capacity') throw new FormClosedError()
     if (status !== 201) throw new Error(`submit failed (${status})`)
     return body
   }

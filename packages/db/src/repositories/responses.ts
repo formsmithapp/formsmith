@@ -1,9 +1,12 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { and, desc, eq, lt, or } from 'drizzle-orm'
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../client'
-import { forms, responses } from '../schema'
+import { forms, formUsage, responses } from '../schema'
+
+/** Thrown inside the metered-insert transaction to roll it back on over-cap. */
+class OverCapError extends Error {}
 
 /**
  * Responses persistence. `insert` is UNSCOPED (the public submit path has no
@@ -80,6 +83,41 @@ export function responsesRepository(db: Database) {
       const [row] = await db.insert(responses).values(data).returning()
       if (row === undefined) throw new Error('response insert returned nothing')
       return row
+    },
+
+    /**
+     * Insert a response while enforcing a monthly cap. Upsert-increments the
+     * `(formId, month)` bucket and stores the response in ONE transaction: if
+     * the increment crosses `monthlyCap`, the transaction rolls back (nothing
+     * stored, the counter is not advanced) and `{ ok: false }` is returned.
+     * `monthlyCap === null` means unlimited (a plain insert, no bucket touched).
+     */
+    async insertMetered(
+      data: NewResponse,
+      opts: { monthlyCap: number | null; month: string },
+    ): Promise<{ ok: true; row: ResponseRow } | { ok: false; reason: 'over_cap' }> {
+      const cap = opts.monthlyCap
+      if (cap === null) return { ok: true, row: await this.insert(data) }
+      try {
+        const row = await db.transaction(async (tx) => {
+          const [usage] = await tx
+            .insert(formUsage)
+            .values({ formId: data.formId, month: opts.month, responses: 1 })
+            .onConflictDoUpdate({
+              target: [formUsage.formId, formUsage.month],
+              set: { responses: sql`${formUsage.responses} + 1` },
+            })
+            .returning({ responses: formUsage.responses })
+          if (usage !== undefined && usage.responses > cap) throw new OverCapError()
+          const [inserted] = await tx.insert(responses).values(data).returning()
+          if (inserted === undefined) throw new Error('response insert returned nothing')
+          return inserted
+        })
+        return { ok: true, row }
+      } catch (error) {
+        if (error instanceof OverCapError) return { ok: false, reason: 'over_cap' }
+        throw error
+      }
     },
 
     /**

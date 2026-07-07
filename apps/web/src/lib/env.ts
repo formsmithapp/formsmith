@@ -45,6 +45,15 @@ const envSchema = z.object({
   FORMSMITH_SUBMIT_RATE: z.coerce.number().int().positive().optional(),
   /** Max entries in the in-memory cache (snapshots, rate windows). Default 500. */
   FORMSMITH_CACHE_MAX_ITEMS: z.coerce.number().int().positive().optional(),
+  /** AI credits + workspace quotas (v0.1.5). Every one unset = unlimited (the
+   * self-host default); the hosted instance sets strict values. Generic core. */
+  FORMSMITH_AI_CREDITS_DEFAULT: z.coerce.number().int().nonnegative().optional(),
+  /** Credits spent per AI form generation. Default 5. (Exchanges cost 1.) */
+  FORMSMITH_AI_GENERATION_COST: z.coerce.number().int().positive().optional(),
+  FORMSMITH_LIMIT_FORMS: z.coerce.number().int().nonnegative().optional(),
+  FORMSMITH_LIMIT_RESPONSES_MONTH: z.coerce.number().int().nonnegative().optional(),
+  FORMSMITH_LIMIT_WEBHOOKS: z.coerce.number().int().nonnegative().optional(),
+  FORMSMITH_LIMIT_API_KEYS: z.coerce.number().int().nonnegative().optional(),
 })
 
 /** Shared truthiness rule for the self-host env toggles. */

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { FormDefinition } from '@formsmithapp/engine'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, count, desc, eq } from 'drizzle-orm'
 import type { Database } from '../client'
 import { forms, formVersions } from '../schema'
 
@@ -44,6 +44,26 @@ export function formsRepository(db: Database) {
     async get(workspaceId: string, formId: string): Promise<FormRow | null> {
       const rows = await db.select().from(forms).where(scoped(workspaceId, formId)).limit(1)
       return rows[0] ?? null
+    },
+
+    /** Number of forms in the workspace (for FORMSMITH_LIMIT_FORMS on create). */
+    async count(workspaceId: string): Promise<number> {
+      const [row] = await db
+        .select({ n: count() })
+        .from(forms)
+        .where(eq(forms.workspaceId, workspaceId))
+      return row?.n ?? 0
+    },
+
+    /** The owning workspace of a form, unscoped — the public AI path charges
+     * the FORM OWNER's credits and has no workspace context of its own. */
+    async workspaceOf(formId: string): Promise<string | null> {
+      const rows = await db
+        .select({ workspaceId: forms.workspaceId })
+        .from(forms)
+        .where(eq(forms.id, formId))
+        .limit(1)
+      return rows[0]?.workspaceId ?? null
     },
 
     /** The row id is server-authoritative — the doc's id is rewritten to it. */

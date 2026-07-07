@@ -12,6 +12,7 @@ import { generateFollowup, generateFormDocument, type ModelProvider } from '@for
 import type { Database } from '@formsmithapp/db'
 import {
   apiKeysRepository,
+  creditsRepository,
   formsRepository,
   responsesRepository,
   schema,
@@ -73,6 +74,18 @@ export interface ApiDeps {
    * Absent → an internal in-memory LRU. Wrapped fail-open either way: a
    * broken cache slows requests down, it never fails them. */
   cache?: CacheAdapter
+  /** AI credits + workspace quotas (v0.1.5). Every field unset = unlimited
+   * (self-host default); the hosted instance passes strict values. */
+  quotas?: {
+    /** Granted per workspace on first AI charge; unset = unlimited (no ledger). */
+    aiCreditsDefault?: number
+    /** Credits per AI generation; default 5. Exchanges always cost 1. */
+    aiGenerationCost?: number
+    forms?: number
+    responsesPerMonth?: number
+    webhooksPerForm?: number
+    apiKeysPerWorkspace?: number
+  }
 }
 
 interface Env {
@@ -200,8 +213,29 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   const responses = responsesRepository(deps.db)
   const apiKeys = apiKeysRepository(deps.db)
   const webhooks = webhooksRepository(deps.db)
+  const credits = creditsRepository(deps.db)
 
   const todayUtc = () => new Date().toISOString().slice(0, 10)
+  const monthUtc = () => new Date().toISOString().slice(0, 7)
+
+  /* ---------- quotas + AI credits (v0.1.5) — every limit unset = unlimited ---------- */
+
+  const AI_EXCHANGE_COST = 1
+  const aiGenerationCost = deps.quotas?.aiGenerationCost ?? 5
+
+  /** Spend `cost` credits for `workspaceId`. Returns false ONLY when a credit
+   * default is configured AND the ledger is exhausted; unlimited otherwise. */
+  const chargeAiCredits = async (workspaceId: string, cost: number): Promise<boolean> => {
+    const grant = deps.quotas?.aiCreditsDefault
+    if (grant === undefined) return true // unlimited — no ledger consulted
+    return (await credits.charge(workspaceId, cost, grant)) !== null
+  }
+
+  /** True when `current` count has reached a configured `limit` (create blocked). */
+  const atQuota = (current: number, limit: number | undefined): boolean =>
+    limit !== undefined && current >= limit
+
+  const quotaError = (resource: string) => ({ error: 'quota_exceeded', resource })
 
   // Tier 1 — serializable-value cache (fail-open by construction). Backed by
   // the in-memory LRU in v1; a Redis implementation slots in via deps.cache.
@@ -438,6 +472,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       request: { params: idParam, body: jsonBody(submissionInput) },
       responses: {
         201: jsonResponse(responseRowDto, 'The stored response (variables recomputed)'),
+        403: jsonResponse(errorDto, 'Form is no longer accepting responses (monthly cap)'),
         404: jsonResponse(errorDto, 'Unknown or unpublished form'),
         422: jsonResponse(errorDto, 'Rejected by server-side re-evaluation'),
         429: jsonResponse(errorDto, 'Rate limited'),
@@ -507,15 +542,21 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         }))
       }
 
-      const row = await responses.insert({
-        formId: id,
-        formVersion: snapshot.version,
-        answers: outcome.answers,
-        variables: outcome.variables,
-        hidden: payload.hiddenFields ?? {},
-        ending: outcome.ending,
-        aiTrace,
-      })
+      const stored = await responses.insertMetered(
+        {
+          formId: id,
+          formVersion: snapshot.version,
+          answers: outcome.answers,
+          variables: outcome.variables,
+          hidden: payload.hiddenFields ?? {},
+          ending: outcome.ending,
+          aiTrace,
+        },
+        { monthlyCap: deps.quotas?.responsesPerMonth ?? null, month: monthUtc() },
+      )
+      // over the monthly cap: nothing stored, the form is closed to new responses
+      if (!stored.ok) return c.json({ error: 'form_over_capacity' }, 403)
+      const row = stored.row
 
       // integrations are queued post-commit and must never fail the submission
       if (deps.queue !== undefined) {
@@ -626,6 +667,21 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
         return c.json({ done: true, reason: 'ai_off' }, 200)
       }
 
+      // Spend a credit from the FORM OWNER's ledger before the model call.
+      // Only when credits are enabled, so the unlimited path skips the lookup.
+      // Exhaustion degrades exactly like a missing AI key: seamless fallback.
+      if (deps.quotas?.aiCreditsDefault !== undefined) {
+        const ownerWorkspace = await forms.workspaceOf(id)
+        const charged =
+          ownerWorkspace !== null && (await chargeAiCredits(ownerWorkspace, AI_EXCHANGE_COST))
+        if (!charged) {
+          if (input.index === 1 && properties.fallbackQuestion !== undefined) {
+            return issue(properties.fallbackQuestion, fallbackMeta('credits_exhausted'))
+          }
+          return c.json({ done: true, reason: 'credits_exhausted' }, 200)
+        }
+      }
+
       const started = Date.now()
       const outcome = await generateFollowup(deps.ai.provider, {
         goal: properties.goal ?? block.title,
@@ -690,16 +746,17 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       responses: {
         201: jsonResponse(storedFormDto, 'The stored form'),
         400: jsonResponse(errorDto, 'Missing document'),
+        403: jsonResponse(errorDto, 'Form quota reached'),
       },
     }),
     async (c) => {
       const body = c.req.valid('json')
       if (body.doc === undefined) return c.json({ error: 'doc is required' }, 400)
-      const row = await forms.create(
-        c.get('workspaceId'),
-        body.doc as unknown as FormDefinition,
-        body.title,
-      )
+      const workspaceId = c.get('workspaceId')
+      if (atQuota(await forms.count(workspaceId), deps.quotas?.forms)) {
+        return c.json(quotaError('forms'), 403)
+      }
+      const row = await forms.create(workspaceId, body.doc as unknown as FormDefinition, body.title)
       return c.json(stored(row), 201)
     },
   )
@@ -1081,12 +1138,17 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
           }),
           'The key — copy the secret now, it is never shown again',
         ),
+        403: jsonResponse(errorDto, 'API key quota reached'),
       },
     }),
     async (c) => {
+      const workspaceId = c.get('workspaceId')
+      if (atQuota(await apiKeys.count(workspaceId), deps.quotas?.apiKeysPerWorkspace)) {
+        return c.json(quotaError('api_keys'), 403)
+      }
       const { name } = c.req.valid('json')
       const material = generateApiKey()
-      const row = await apiKeys.create(c.get('workspaceId'), name, material)
+      const row = await apiKeys.create(workspaceId, name, material)
       return c.json(
         { key: { id: row.id, name: row.name, prefix: row.prefix }, secret: material.secret },
         201,
@@ -1176,15 +1238,22 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
           }),
           'The webhook — copy the signing secret now',
         ),
+        403: jsonResponse(errorDto, 'Webhook quota reached'),
         404: jsonResponse(errorDto, 'Not found in this workspace'),
       },
     }),
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const workspaceId = c.get('workspaceId')
+      // ownership first (foreign form 404s before the quota is consulted)
+      if ((await forms.get(workspaceId, id)) === null) return c.json(NOT_FOUND, 404)
+      if (atQuota(await webhooks.count(id), deps.quotas?.webhooksPerForm)) {
+        return c.json(quotaError('webhooks'), 403)
+      }
       const { url } = c.req.valid('json')
       const secret = generateWebhookSecret()
-      const row = await webhooks.create(c.get('workspaceId'), id, url, secret)
+      const row = await webhooks.create(workspaceId, id, url, secret)
       if (row === null) return c.json(NOT_FOUND, 404)
       return c.json({ webhook: { id: row.id, url: row.url }, secret }, 201)
     },
@@ -1263,6 +1332,13 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       const workspaceId = c.get('workspaceId')
       if (await overLimit('generate', workspaceId, 10, 3_600)) {
         return c.json({ error: 'rate limited' }, 429)
+      }
+      if (atQuota(await forms.count(workspaceId), deps.quotas?.forms)) {
+        return c.json(quotaError('forms'), 403)
+      }
+      // generation spends N credits up front; exhaustion is a friendly 403
+      if (!(await chargeAiCredits(workspaceId, aiGenerationCost))) {
+        return c.json({ error: 'ai_credits_exhausted' }, 403)
       }
       const { prompt } = c.req.valid('json')
       try {

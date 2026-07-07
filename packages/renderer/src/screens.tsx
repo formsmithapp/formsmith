@@ -42,6 +42,7 @@ const STATUS_LINE: Record<string, string> = {
   retrying: 'Reconnecting to record your response…',
   sent: 'Response recorded.',
   failed: 'We could not save your response.',
+  closed: 'This form is no longer accepting responses.',
 }
 
 /** Delivery status line + a manual retry once delivery has terminally failed. */

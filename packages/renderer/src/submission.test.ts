@@ -83,6 +83,21 @@ describe('createRetryQueue', () => {
     queue.dispose()
   })
 
+  it('goes straight to closed on a terminal rejection, without retrying', async () => {
+    const closed = Object.assign(new Error('form closed'), { terminal: true })
+    const submit = vi.fn().mockRejectedValue(closed)
+    const queue = createRetryQueue(submit)
+    queue.push(payload())
+    await vi.runAllTimersAsync()
+    expect(queue.getStatus()).toBe('closed')
+    expect(submit).toHaveBeenCalledTimes(1) // no retries on a permanent refusal
+    // a manual retry cannot revive a closed submission
+    queue.retry()
+    await vi.runAllTimersAsync()
+    expect(submit).toHaveBeenCalledTimes(1)
+    queue.dispose()
+  })
+
   it('stops after dispose', async () => {
     const submit = vi.fn().mockRejectedValue(new Error('down'))
     const queue = createRetryQueue(submit)
