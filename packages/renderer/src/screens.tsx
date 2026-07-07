@@ -78,12 +78,16 @@ export function EndingView({ block }: { block: Block }) {
     return () => clearTimeout(timer)
   }, [redirectUrl, options])
 
+  const hasCta = ctaLabel !== undefined && ctaUrl !== undefined
+
   return (
     <div>
       <span className="fsr-badge">{BADGE.thankyou}</span>
-      {/* Programmatic focus target so completion moves focus here (announced to
-          screen readers) instead of dropping it to <body>. */}
-      <h1 className="fsr-title" tabIndex={-1} data-fsr-autofocus>
+      {/* On completion, focus the primary next action (the CTA) when there is
+          one, so Enter activates it, otherwise focus the heading. Either way
+          completion is announced by the aria-live submit status below, and
+          focus never drops to <body>. */}
+      <h1 className="fsr-title" tabIndex={-1} data-fsr-autofocus={hasCta ? undefined : true}>
         {piped(block.title)}
       </h1>
       {block.description !== undefined && <p className="fsr-desc">{piped(block.description)}</p>}
@@ -91,7 +95,13 @@ export function EndingView({ block }: { block: Block }) {
       {redirectUrl !== undefined && <p className="fsr-submit-status">Redirecting…</p>}
       {ctaLabel !== undefined && ctaUrl !== undefined && (
         <div className="fsr-okrow">
-          <a className="fsr-ok" href={ctaUrl} target="_blank" rel="noopener noreferrer">
+          <a
+            className="fsr-ok"
+            href={ctaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-fsr-autofocus
+          >
             {ctaLabel}
             <span className="fsr-visually-hidden"> (opens in a new tab)</span>
           </a>

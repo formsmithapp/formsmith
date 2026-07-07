@@ -525,6 +525,33 @@ it('moves focus to the ending heading on completion (not lost to body)', async (
   })
 })
 
+it('focuses the ending CTA (so Enter activates it) when one is set', async () => {
+  const form: FormDefinition = {
+    id: 'r_cta',
+    version: 1,
+    blocks: [
+      { id: 'b_w', ref: 'w', type: 'welcome', title: 'Hi' },
+      {
+        id: 'b_end',
+        ref: 'end',
+        type: 'thankyou',
+        title: 'Thanks!',
+        properties: { ctaLabel: 'Explore Formsmith', ctaUrl: 'https://formsmith.app' },
+      },
+    ],
+  }
+  const { host } = mountForm(form)
+  await settled(host, 'Hi')
+  await userEvent.keyboard('{Enter}') // welcome -> ending
+
+  // Focus lands on the CTA link, not the heading, so Enter follows it.
+  await vi.waitFor(() => {
+    const active = document.activeElement
+    expect(active?.tagName).toBe('A')
+    expect(active?.getAttribute('href')).toBe('https://formsmith.app')
+  })
+})
+
 it('advertises input purpose on contact fields via autocomplete (WCAG 1.3.5)', async () => {
   const form: FormDefinition = {
     id: 'r_ac',
