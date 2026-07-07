@@ -866,8 +866,11 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const workspaceId = c.get('workspaceId')
+      // a foreign form must 404, not leak an empty page (matches summary/export)
+      if ((await forms.get(workspaceId, id)) === null) return c.json(NOT_FOUND, 404)
       const { limit, cursor } = c.req.valid('query')
-      const page = await responses.list(c.get('workspaceId'), id, { limit, cursor })
+      const page = await responses.list(workspaceId, id, { limit, cursor })
       return c.json(
         { responses: page.responses.map(responseJson), nextCursor: page.nextCursor },
         200,

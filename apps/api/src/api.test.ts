@@ -285,17 +285,118 @@ describe('responses: pagination, summary, export', () => {
     expect(new Set(rows.map((r) => r.id))).toEqual(new Set(ids))
   })
 
-  it("another workspace cannot read a form's summary or export (404)", async () => {
+  it("another workspace cannot read a form's summary, export, or response list (404)", async () => {
     const { id } = await seed(2)
     currentUser = 'mallory'
     expect((await app.request(`/api/v1/forms/${id}/responses/summary`)).status).toBe(404)
     expect((await app.request(`/api/v1/forms/${id}/responses/export`)).status).toBe(404)
-    // the list endpoint scopes by the forms join, so it yields an empty page
-    // (no leak); tightening it to 404 is the v0.1.5 cross-tenant authz pass.
-    const list = (await (await app.request(`/api/v1/forms/${id}/responses?limit=5`)).json()) as {
-      responses: unknown[]
+    // v0.1.5: the list endpoint now 404s a foreign form too (was an empty 200),
+    // so every responses path behaves the same. Full matrix in the authz suite.
+    expect((await app.request(`/api/v1/forms/${id}/responses?limit=5`)).status).toBe(404)
+  })
+})
+
+describe('cross-tenant authz proof (v0.1.5 E)', () => {
+  // alice owns everything; mallory is a second workspace that must be walled off
+  // from every authed endpoint, by session AND by API-key bearer.
+  async function seedAliceResources() {
+    currentUser = 'alice'
+    const formId = await createForm()
+    await app.request(`/api/v1/forms/${formId}/publish`, { method: 'POST' })
+
+    currentUser = null // respondent
+    const submit = await app.request(
+      `/api/v1/f/${formId}/responses`,
+      json({ answers: { plan: 'pro' } }),
+    )
+    const responseId = ((await submit.json()) as { id: string }).id
+
+    currentUser = 'alice'
+    const wh = await app.request(
+      `/api/v1/forms/${formId}/webhooks`,
+      json({ url: 'https://alice.test/hook' }),
+    )
+    const webhookId = ((await wh.json()) as { webhook: { id: string } }).webhook.id
+    const ak = await app.request('/api/v1/api-keys', json({ name: 'alice key' }))
+    const apiKeyId = ((await ak.json()) as { key: { id: string } }).key.id
+
+    return { formId, responseId, webhookId, apiKeyId }
+  }
+
+  it('every authed endpoint 404s a foreign resource (session auth)', async () => {
+    const { formId, responseId, webhookId, apiKeyId } = await seedAliceResources()
+    currentUser = 'mallory'
+
+    const attempts: Array<[string, RequestInit?]> = [
+      [`/api/v1/forms/${formId}`],
+      [`/api/v1/forms/${formId}`, { ...json({ doc: quizDoc() }), method: 'PUT' }],
+      [`/api/v1/forms/${formId}`, { method: 'DELETE' }],
+      [`/api/v1/forms/${formId}/publish`, { method: 'POST' }],
+      [`/api/v1/forms/${formId}/duplicate`, { method: 'POST' }],
+      [`/api/v1/forms/${formId}/versions/1`],
+      [`/api/v1/forms/${formId}/responses`],
+      [`/api/v1/forms/${formId}/responses/summary`],
+      [`/api/v1/forms/${formId}/responses/export`],
+      [`/api/v1/forms/${formId}/responses/${responseId}`],
+      [`/api/v1/forms/${formId}/responses/${responseId}`, { method: 'DELETE' }],
+      [`/api/v1/forms/${formId}/webhooks`],
+      [`/api/v1/forms/${formId}/webhooks`, json({ url: 'https://mallory.test/hook' })],
+      [`/api/v1/forms/${formId}/webhooks/${webhookId}`, { method: 'DELETE' }],
+      [`/api/v1/forms/${formId}/webhooks/${webhookId}/test`, { method: 'POST' }],
+      [`/api/v1/api-keys/${apiKeyId}`, { method: 'DELETE' }],
+    ]
+
+    for (const [path, init] of attempts) {
+      const res = await app.request(path, init)
+      expect(res.status, `${init?.method ?? 'GET'} ${path}`).toBe(404)
     }
-    expect(list.responses).toEqual([])
+  })
+
+  it('an API key is confined to its own workspace (bearer auth)', async () => {
+    const { formId } = await seedAliceResources()
+    // mallory mints her own key, then aims it at alice's form with NO session
+    currentUser = 'mallory'
+    const mk = await app.request('/api/v1/api-keys', json({ name: 'mallory key' }))
+    const secret = ((await mk.json()) as { secret: string }).secret
+
+    currentUser = null // force the bearer path
+    const bearer = { headers: { authorization: `Bearer ${secret}` } }
+    for (const path of [
+      `/api/v1/forms/${formId}`,
+      `/api/v1/forms/${formId}/responses`,
+      `/api/v1/forms/${formId}/responses/summary`,
+      `/api/v1/forms/${formId}/responses/export`,
+      `/api/v1/forms/${formId}/webhooks`,
+    ]) {
+      expect((await app.request(path, bearer)).status, path).toBe(404)
+    }
+    // sanity: the same key DOES reach mallory's own surface
+    expect((await app.request('/api/v1/forms', bearer)).status).toBe(200)
+  })
+
+  it('the victim workspace is unchanged after the destructive attempts', async () => {
+    const { formId, responseId, webhookId, apiKeyId } = await seedAliceResources()
+
+    currentUser = 'mallory' // throw every delete/mutation at alice's ids
+    await app.request(`/api/v1/forms/${formId}`, { method: 'DELETE' })
+    await app.request(`/api/v1/forms/${formId}/responses/${responseId}`, { method: 'DELETE' })
+    await app.request(`/api/v1/forms/${formId}/webhooks/${webhookId}`, { method: 'DELETE' })
+    await app.request(`/api/v1/api-keys/${apiKeyId}`, { method: 'DELETE' })
+
+    currentUser = 'alice' // everything is still there
+    expect((await app.request(`/api/v1/forms/${formId}`)).status).toBe(200)
+    const list = (await (await app.request(`/api/v1/forms/${formId}/responses`)).json()) as {
+      responses: { id: string }[]
+    }
+    expect(list.responses.map((r) => r.id)).toContain(responseId)
+    const whs = (await (await app.request(`/api/v1/forms/${formId}/webhooks`)).json()) as {
+      webhooks: { id: string }[]
+    }
+    expect(whs.webhooks.map((w) => w.id)).toContain(webhookId)
+    const keys = (await (await app.request('/api/v1/api-keys')).json()) as {
+      keys: { id: string }[]
+    }
+    expect(keys.keys.map((k) => k.id)).toContain(apiKeyId)
   })
 })
 
