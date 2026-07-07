@@ -32,7 +32,7 @@ async function createFormWithQuestion(page: Page): Promise<string> {
 
   await expect(page.getByRole('button', { name: /Add block/ })).toBeVisible()
   await page.keyboard.press('ControlOrMeta+k')
-  const search = page.getByRole('textbox', { name: 'Search blocks' })
+  const search = page.getByRole('combobox', { name: 'Search blocks' })
   await expect(search).toBeVisible()
   await search.fill('short')
   await page.keyboard.press('Enter')

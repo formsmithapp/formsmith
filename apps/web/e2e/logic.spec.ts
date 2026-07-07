@@ -26,7 +26,7 @@ test('author the scored quiz in the UI: scoring, jump-on-score, piped endings', 
   // Q1: multiple choice with 3 / 4
   await rail('welcome').click()
   await page.keyboard.press('ControlOrMeta+k')
-  await page.getByRole('textbox', { name: 'Search blocks' }).fill('multiple')
+  await page.getByRole('combobox', { name: 'Search blocks' }).fill('multiple')
   await page.keyboard.press('Enter')
   const title = page.getByRole('textbox', { name: 'Question title' })
   await title.click()
@@ -54,7 +54,7 @@ test('author the scored quiz in the UI: scoring, jump-on-score, piped endings', 
   await screenTitle.click()
   await screenTitle.fill('Only {{score}} points.')
   await page.keyboard.press('ControlOrMeta+k')
-  await page.getByRole('textbox', { name: 'Search blocks' }).fill('thank')
+  await page.getByRole('combobox', { name: 'Search blocks' }).fill('thank')
   await page.keyboard.press('Enter')
   await screenTitle.click()
   await screenTitle.fill('Great — {{score}} points!')
@@ -111,7 +111,7 @@ test('visibility + hidden fields: authored in the UI, honored in preview', async
   // yes/no before the starter question
   await page.locator('[data-rail-row="welcome"]').click()
   await page.keyboard.press('ControlOrMeta+k')
-  await page.getByRole('textbox', { name: 'Search blocks' }).fill('yes')
+  await page.getByRole('combobox', { name: 'Search blocks' }).fill('yes')
   await page.keyboard.press('Enter')
   const title = page.getByRole('textbox', { name: 'Question title' })
   await title.click()

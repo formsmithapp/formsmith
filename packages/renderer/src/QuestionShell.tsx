@@ -62,11 +62,14 @@ export function QuestionShell({ block }: { block: Block }) {
         </span>
       )}
       {position > 0 && !isAi && (
-        <p className="fsr-eyebrow">
+        <p className="fsr-eyebrow" aria-hidden="true">
           Question {position} <ArrowIcon />
         </p>
       )}
       <h1 className={`fsr-title${isAi ? ' fsr-title-ai' : ''}`} id={labelId}>
+        {position > 0 && !isAi && (
+          <span className="fsr-visually-hidden">Question {position}, </span>
+        )}
         {piped(block.title)}
         {block.required && (
           <>

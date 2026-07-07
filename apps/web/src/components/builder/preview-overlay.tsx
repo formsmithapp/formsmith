@@ -68,7 +68,12 @@ export function PreviewOverlay({
   const logoUrl = parseThemeConfig(store.getState().doc.theme).logoUrl
 
   return (
-    <div className="fixed inset-0 z-50 bg-canvas">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Form preview"
+      className="fixed inset-0 z-50 bg-canvas"
+    >
       {'engine' in session && session.engine !== undefined ? (
         <FormRuntime
           engine={session.engine}

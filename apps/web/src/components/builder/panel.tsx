@@ -427,18 +427,16 @@ export function Panel({
   const block = state.doc.blocks.find((b) => b.id === state.selectedId) ?? null
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-line bg-surface">
-      <div
-        role="tablist"
-        aria-label="Panel tabs"
-        className="grid grid-cols-2 gap-1 border-b border-line p-2"
-      >
+    <aside
+      aria-label="Block settings"
+      className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-line bg-surface"
+    >
+      <div className="grid grid-cols-2 gap-1 border-b border-line p-2">
         {(['content', 'design'] as const).map((id) => (
           <button
             key={id}
             type="button"
-            role="tab"
-            aria-selected={tab === id}
+            aria-pressed={tab === id}
             onClick={() => setTab(id)}
             className={`rounded-[7px] px-2 py-1.5 text-[12px] font-semibold capitalize transition-colors ${
               tab === id ? 'bg-surface-2 shadow-sm' : 'text-fg-3 hover:text-fg'

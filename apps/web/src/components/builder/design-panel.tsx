@@ -143,15 +143,18 @@ export function DesignPanel() {
       </Group>
 
       <Group title="Appearance">
-        <fieldset
+        <div
+          role="radiogroup"
           aria-label="Appearance"
           className="grid grid-cols-3 gap-1 rounded-[9px] border border-line bg-surface-2 p-1"
         >
           {(['light', 'dark', 'auto'] as const).map((mode) => (
+            // biome-ignore lint/a11y/useSemanticElements: single-select toggle buttons as a radiogroup, not native radios
             <button
               key={mode}
               type="button"
-              aria-pressed={theme.appearance === mode}
+              role="radio"
+              aria-checked={theme.appearance === mode}
               onClick={() => store.setTheme({ appearance: mode })}
               className={`rounded-[6px] px-2 py-1.5 text-[12px] font-medium capitalize transition-colors ${
                 theme.appearance === mode
@@ -162,7 +165,7 @@ export function DesignPanel() {
               {mode}
             </button>
           ))}
-        </fieldset>
+        </div>
       </Group>
 
       <Group title="Background">

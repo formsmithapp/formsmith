@@ -22,7 +22,7 @@ test('builder M1: create, compose, edit, undo, autosave, preview, publish', asyn
 
   // ⌘K palette → search → insert an opinion scale
   await page.keyboard.press('ControlOrMeta+k')
-  const search = page.getByRole('textbox', { name: 'Search blocks' })
+  const search = page.getByRole('combobox', { name: 'Search blocks' })
   await expect(search).toBeVisible()
   await search.fill('opinion')
   await page.keyboard.press('Enter')

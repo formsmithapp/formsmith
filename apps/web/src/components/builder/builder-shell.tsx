@@ -77,8 +77,17 @@ export function BuilderShell() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
+      <a
+        href="#builder-canvas"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[70] focus:rounded-md focus:bg-ink focus:px-3 focus:py-2 focus:text-[13px] focus:text-[#f4f3ec]"
+      >
+        Skip to canvas
+      </a>
       <TopBar onToast={showToast} />
-      <div className="grid min-h-0 flex-1 grid-cols-[272px_minmax(0,1fr)_320px] max-[1180px]:grid-cols-[248px_minmax(0,1fr)_288px] max-[860px]:grid-cols-[248px_minmax(0,1fr)]">
+      <div
+        inert={state.previewMode || undefined}
+        className="grid min-h-0 flex-1 grid-cols-[272px_minmax(0,1fr)_320px] max-[1180px]:grid-cols-[248px_minmax(0,1fr)_288px] max-[860px]:grid-cols-[248px_minmax(0,1fr)]"
+      >
         <Rail />
         <Canvas />
         <div className="min-h-0 max-[860px]:hidden">

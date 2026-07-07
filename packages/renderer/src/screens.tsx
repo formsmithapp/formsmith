@@ -93,6 +93,7 @@ export function EndingView({ block }: { block: Block }) {
         <div className="fsr-okrow">
           <a className="fsr-ok" href={ctaUrl} target="_blank" rel="noopener noreferrer">
             {ctaLabel}
+            <span className="fsr-visually-hidden"> (opens in a new tab)</span>
           </a>
         </div>
       )}

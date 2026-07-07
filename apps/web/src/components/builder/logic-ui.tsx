@@ -215,9 +215,12 @@ export function GroupEditor({
           aria-label="Combinator"
         >
           {(['and', 'or'] as const).map((mode) => (
+            // biome-ignore lint/a11y/useSemanticElements: combinator radiogroup of toggle buttons, not native radios
             <button
               key={mode}
               type="button"
+              role="radio"
+              aria-checked={group.combinator === mode}
               onClick={() => onChange({ ...group, combinator: mode })}
               className={`flex-1 rounded-[7px] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
                 group.combinator === mode ? 'bg-surface-2 shadow-sm' : 'text-fg-2'

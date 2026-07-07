@@ -6,7 +6,7 @@ import { type BlockDefinition, v1BlockDefinitions } from '@formsmithapp/blocks'
 import type { BlockType } from '@formsmithapp/engine'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { BlockIconTile } from './block-icons'
 import { useBuilder, useBuilderState } from './store-context'
 
@@ -29,6 +29,7 @@ export function Palette() {
   // True for the brief window between an insert and the dialog closing, so the
   // close handler can hand focus to the new block instead of the trigger.
   const insertedRef = useRef(false)
+  const listId = useId()
 
   const hasWelcome = state.doc.blocks.some((b) => b.type === 'welcome')
 
@@ -101,13 +102,22 @@ export function Palette() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search blocks…"
               aria-label="Search blocks"
+              role="combobox"
+              aria-expanded={flat.length > 0}
+              aria-controls={listId}
+              aria-activedescendant={flat.length > 0 ? `${listId}-opt-${active}` : undefined}
               className="flex-1 bg-transparent text-[14.5px] outline-none placeholder:text-fg-3"
             />
             <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-3">
               Esc
             </kbd>
           </div>
-          <div className="max-h-[52vh] overflow-y-auto p-3">
+          <div
+            id={listId}
+            role="listbox"
+            aria-label="Blocks"
+            className="max-h-[52vh] overflow-y-auto p-3"
+          >
             {entries.map(({ group, items }) => (
               <section key={group.category} className="mb-3">
                 <h3
@@ -124,6 +134,11 @@ export function Palette() {
                       <button
                         key={definition.type}
                         type="button"
+                        role="option"
+                        id={disabled ? undefined : `${listId}-opt-${enabledIndex}`}
+                        aria-selected={isActive}
+                        aria-disabled={disabled || undefined}
+                        tabIndex={-1}
                         disabled={disabled}
                         data-palette-item={definition.type}
                         onClick={() => insert(definition.type)}
@@ -158,7 +173,9 @@ export function Palette() {
               </section>
             ))}
             {flat.length === 0 && (
-              <p className="px-1.5 py-6 text-center text-[13px] text-fg-3">No blocks match.</p>
+              <p role="status" className="px-1.5 py-6 text-center text-[13px] text-fg-3">
+                No blocks match.
+              </p>
             )}
           </div>
         </Dialog.Content>

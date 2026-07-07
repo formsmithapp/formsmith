@@ -192,7 +192,7 @@ export function Rail() {
 
   let question = 0
   return (
-    <aside className="flex min-h-0 flex-col border-r border-line bg-surface">
+    <aside aria-label="Blocks" className="flex min-h-0 flex-col border-r border-line bg-surface">
       <div className="flex items-center justify-between px-4 pt-4 pb-2 max-[1040px]:hidden">
         <span className="eyebrow text-fg-3">Content</span>
         <span className="font-mono text-[10.5px] text-fg-3 tabular-nums">{blocks.length}</span>

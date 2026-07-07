@@ -195,21 +195,36 @@ function RecallButton({ block }: { block: Block }) {
   const fields = conditionFields(doc, block.id, { includeSelf: false })
   if (fields.length === 0) return null
   return (
-    <span className="relative">
+    // biome-ignore lint/a11y/noStaticElementInteractions: delegates Escape for the popover; focus stays on the trigger and menu items
+    <span
+      className="relative"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation()
+          setOpen(false)
+        }
+      }}
+    >
       <button
         type="button"
         aria-label="Insert recall token"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="grid size-6 place-items-center rounded-md border border-line bg-surface-2 text-fg-3 opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100 hover:text-brand"
       >
         <Braces size={11} />
       </button>
       {open && (
-        <span className="absolute top-7 right-0 z-10 grid w-44 gap-0.5 rounded-[10px] border border-line bg-surface-2 p-1.5 shadow-md">
+        <span
+          role="menu"
+          className="absolute top-7 right-0 z-10 grid w-44 gap-0.5 rounded-[10px] border border-line bg-surface-2 p-1.5 shadow-md"
+        >
           {fields.map((field) => (
             <button
               key={field.ref}
               type="button"
+              role="menuitem"
               onClick={() => {
                 store.updateBlock(block.id, { title: `${block.title}{{${field.ref}}}` })
                 setOpen(false)
@@ -267,9 +282,12 @@ export function Canvas() {
 
   return (
     <main
+      id="builder-canvas"
+      tabIndex={-1}
+      aria-label="Canvas"
       data-theme={theming?.appearance}
       style={theming?.vars as React.CSSProperties | undefined}
-      className="relative min-h-0 overflow-y-auto [background:var(--canvas)] text-fg"
+      className="relative min-h-0 overflow-y-auto outline-none [background:var(--canvas)] text-fg"
     >
       <div
         aria-hidden="true"
@@ -322,7 +340,7 @@ export function Canvas() {
               <InlineEdit
                 value={block.title}
                 placeholder={isScreen ? 'Screen headline…' : 'Type your question…'}
-                label={`${isScreen ? 'Screen' : 'Question'} title`}
+                label={`${isScreen ? 'Screen' : 'Question'} title${block.required ? ', required' : ''}`}
                 autoFocus={state.pendingTitleFocusId === block.id}
                 onChange={(title) => store.updateBlock(block.id, { title }, `title:${block.id}`)}
                 className={`min-w-0 flex-1 font-serif text-[clamp(26px,3.4vw,40px)] leading-[1.18] font-semibold tracking-[-0.012em] [text-wrap:balance] ${

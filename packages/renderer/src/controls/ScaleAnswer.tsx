@@ -53,7 +53,13 @@ export function ScaleAnswer(props: ControlProps) {
               checked={value === n}
               onChange={() => record(n)}
               onClick={(event) => advanceOnPointerClick(event.detail)}
-              aria-label={String(n)}
+              aria-label={
+                n === range.min && minLabel !== ''
+                  ? `${n}, ${minLabel}`
+                  : n === range.max && maxLabel !== ''
+                    ? `${n}, ${maxLabel}`
+                    : String(n)
+              }
               data-fsr-autofocus={index === 0 ? true : undefined}
             />
             <span aria-hidden="true">{n}</span>

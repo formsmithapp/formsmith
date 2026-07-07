@@ -56,7 +56,7 @@ export function DropdownAnswer(props: ControlProps) {
         className="fsr-input"
         role="combobox"
         aria-expanded={open}
-        aria-controls={listId}
+        aria-controls={open ? listId : undefined}
         aria-autocomplete="list"
         aria-activedescendant={open ? filtered[active] && optionId(filtered[active]) : undefined}
         aria-labelledby={props.labelId}
@@ -116,7 +116,11 @@ export function DropdownAnswer(props: ControlProps) {
               {choice.label}
             </div>
           ))}
-          {filtered.length === 0 && <div className="fsr-empty">No matches</div>}
+          {filtered.length === 0 && (
+            <div className="fsr-empty" role="status">
+              No matches
+            </div>
+          )}
         </div>
       )}
     </div>

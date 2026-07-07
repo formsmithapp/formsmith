@@ -402,6 +402,7 @@ export function FormRuntime(props: FormRuntimeProps) {
                 rel="noreferrer"
               >
                 Powered by <b>Formsmith</b>
+                <span className="fsr-visually-hidden"> (opens in a new tab)</span>
               </a>
             )}
           </div>

@@ -42,7 +42,7 @@ export function AiExchangeView({
       <div className="fsr-stage fsr-enter-fwd">
         {aiDisclosure && <span className="fsr-ai-tag">AI-generated question</span>}
         {question === null ? (
-          <h1 className="fsr-title fsr-title-ai" aria-live="polite">
+          <h1 className="fsr-title fsr-title-ai" aria-live="polite" aria-busy="true">
             Thinking<span aria-hidden="true">…</span>
           </h1>
         ) : (

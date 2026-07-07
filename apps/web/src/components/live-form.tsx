@@ -124,7 +124,7 @@ export function LiveForm({
   }
 
   return (
-    <div className="h-dvh">
+    <main className="h-dvh">
       <FormRuntime
         engine={engine}
         onSubmit={handleSubmit}
@@ -134,6 +134,6 @@ export function LiveForm({
         logoUrl={logoUrl}
         branding={branding}
       />
-    </div>
+    </main>
   )
 }
