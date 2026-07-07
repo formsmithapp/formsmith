@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, lt, or } from 'drizzle-orm'
 import type { Database } from '../client'
 import { forms, responses } from '../schema'
 
@@ -33,6 +33,44 @@ export interface NewResponse {
   aiTrace?: unknown[] | null
 }
 
+export interface ListOptions {
+  /** Opaque keyset cursor from a previous page's `nextCursor`. */
+  cursor?: string
+  /** Page size; clamped to [1, MAX_LIMIT], default DEFAULT_LIMIT. */
+  limit?: number
+}
+
+export interface ResponsePage {
+  responses: ResponseRow[]
+  /** Feed back as `cursor` for the next page, or null when the list is exhausted. */
+  nextCursor: string | null
+}
+
+export const DEFAULT_LIMIT = 50
+export const MAX_LIMIT = 200
+
+/** Keyset order is (submittedAt desc, id desc); the cursor pins both halves. */
+const encodeCursor = (row: { submittedAt: Date; id: string }): string =>
+  Buffer.from(`${row.submittedAt.toISOString()}|${row.id}`).toString('base64url')
+
+function decodeCursor(cursor: string): { submittedAt: Date; id: string } | null {
+  let raw: string
+  try {
+    raw = Buffer.from(cursor, 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+  const sep = raw.lastIndexOf('|')
+  if (sep === -1) return null
+  const submittedAt = new Date(raw.slice(0, sep))
+  const id = raw.slice(sep + 1)
+  if (Number.isNaN(submittedAt.getTime()) || id === '') return null
+  return { submittedAt, id }
+}
+
+const clampLimit = (limit: number | undefined): number =>
+  Math.min(Math.max(1, Math.trunc(limit ?? DEFAULT_LIMIT)), MAX_LIMIT)
+
 export function responsesRepository(db: Database) {
   const scopedForm = (workspaceId: string, formId: string) =>
     and(eq(forms.workspaceId, workspaceId), eq(forms.id, formId))
@@ -44,14 +82,58 @@ export function responsesRepository(db: Database) {
       return row
     },
 
-    async list(workspaceId: string, formId: string): Promise<ResponseRow[]> {
+    /**
+     * One keyset page, newest first. The tie-break on `id` makes the order a
+     * total order so pages never overlap or drop rows when timestamps collide.
+     * Served by `responses_form_submitted_idx` (formId, submittedAt desc).
+     */
+    async list(
+      workspaceId: string,
+      formId: string,
+      options: ListOptions = {},
+    ): Promise<ResponsePage> {
+      const limit = clampLimit(options.limit)
+      const after = options.cursor !== undefined ? decodeCursor(options.cursor) : null
+
+      // (submittedAt, id) < (cursor) under the desc ordering.
+      const keyset =
+        after !== null
+          ? or(
+              lt(responses.submittedAt, after.submittedAt),
+              and(eq(responses.submittedAt, after.submittedAt), lt(responses.id, after.id)),
+            )
+          : undefined
+
       const rows = await db
         .select({ response: responses })
         .from(responses)
         .innerJoin(forms, eq(responses.formId, forms.id))
-        .where(scopedForm(workspaceId, formId))
-        .orderBy(desc(responses.submittedAt))
-      return rows.map((row) => row.response)
+        .where(and(scopedForm(workspaceId, formId), keyset))
+        .orderBy(desc(responses.submittedAt), desc(responses.id))
+        .limit(limit + 1)
+
+      const page = rows.slice(0, limit).map((row) => row.response)
+      const last = page[page.length - 1]
+      const nextCursor = rows.length > limit && last !== undefined ? encodeCursor(last) : null
+      return { responses: page, nextCursor }
+    },
+
+    /**
+     * Cursor-walks the whole (workspace-scoped) response set in newest-first
+     * batches for streaming export + server-side summary folds. Bounded memory:
+     * one batch is resident at a time, never the full table.
+     */
+    async *walk(
+      workspaceId: string,
+      formId: string,
+      batchSize = MAX_LIMIT,
+    ): AsyncGenerator<ResponseRow[]> {
+      let cursor: string | undefined
+      do {
+        const page = await this.list(workspaceId, formId, { cursor, limit: batchSize })
+        if (page.responses.length > 0) yield page.responses
+        cursor = page.nextCursor ?? undefined
+      } while (cursor !== undefined)
     },
 
     async get(

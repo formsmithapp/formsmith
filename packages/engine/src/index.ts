@@ -26,6 +26,21 @@ export {
   isEmptyValue,
 } from './registry'
 export {
+  createSummaryFolder,
+  csvHeader,
+  csvRow,
+  exportRefs,
+  type FoldedSummary,
+  formatAnswer,
+  isAnswered,
+  type QuestionSummary,
+  type ResultsResponse,
+  type SummaryBlock,
+  summarize,
+  toCsv,
+  toJson,
+} from './results'
+export {
   createSubmissionEvaluator,
   type EvaluateOptions,
   evaluateSubmission,

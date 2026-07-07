@@ -3,32 +3,20 @@
 'use client'
 
 import type { FormDefinition } from '@formsmithapp/engine'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, Inbox, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import { getRepository, getResponsesRepository } from '@/lib/repository/client'
 import type { StoredResponse } from '@/lib/repository/responses'
-import {
-  formatAnswer,
-  isAnswered,
-  type QuestionSummary,
-  summarize,
-  toCsv,
-  toJson,
-} from '@/lib/results'
+import { formatAnswer, isAnswered, type QuestionSummary } from '@/lib/results'
 import { TabHeader } from './tab-header'
 
 const SCREEN_TYPES = new Set(['welcome', 'statement', 'thankyou'])
 
-function download(filename: string, mime: string, content: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
+/** The mounted data plane; export streams straight from here (carries the session cookie). */
+const exportHref = (formId: string, format: 'csv' | 'json') =>
+  `/api/v1/forms/${formId}/responses/export?format=${format}`
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -142,6 +130,7 @@ function ResponseDetail({
     mutationFn: () => getResponsesRepository().remove(formId, response.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['responses', formId] })
+      queryClient.invalidateQueries({ queryKey: ['summary', formId] })
       onDeleted()
     },
   })
@@ -234,21 +223,31 @@ export function ResultsView({ formId, snapshot }: { formId: string; snapshot: Fo
   const [view, setView] = useState<'summary' | 'responses'>('summary')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const responses = useQuery({
-    queryKey: ['responses', formId],
-    queryFn: () => getResponsesRepository().list(formId),
+  // Summary (with the authoritative total) is server-computed and always loaded.
+  const summary = useQuery({
+    queryKey: ['summary', formId],
+    queryFn: () => getResponsesRepository().summary(formId),
   })
-  const all = responses.data ?? []
-  const selected = all.find((response) => response.id === selectedId) ?? all[0] ?? null
+  // The response list paginates; only fetched once the Responses tab is opened.
+  const responses = useInfiniteQuery({
+    queryKey: ['responses', formId],
+    queryFn: ({ pageParam }) => getResponsesRepository().list(formId, { cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: view === 'responses',
+  })
+  const loaded = responses.data?.pages.flatMap((page) => page.responses) ?? []
+  const total = summary.data?.total ?? 0
+  const selected = loaded.find((response) => response.id === selectedId) ?? loaded[0] ?? null
 
-  if (responses.isSuccess && all.length === 0) {
+  if (summary.isSuccess && total === 0) {
     return (
       <div className="grid flex-1 place-items-center px-6">
         <div className="max-w-sm text-center">
           <Inbox size={22} className="mx-auto text-fg-3" aria-hidden="true" />
           <h2 className="mt-4 font-serif text-[22px] font-semibold">No responses yet</h2>
           <p className="mt-2 text-[13.5px] leading-relaxed text-fg-2">
-            Share the live link — every completed response lands here.
+            Share the live link, every completed response lands here.
           </p>
           <Link
             href={`/f/${formId}`}
@@ -277,60 +276,72 @@ export function ResultsView({ formId, snapshot }: { formId: string; snapshot: Fo
             >
               {key}
               {key === 'responses' && (
-                <span className="ml-1.5 font-mono text-[11px] text-fg-3">{all.length}</span>
+                <span className="ml-1.5 font-mono text-[11px] text-fg-3">{total}</span>
               )}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => download(`${formId}-responses.csv`, 'text/csv', toCsv(snapshot, all))}
+          <a
+            href={exportHref(formId, 'csv')}
+            download={`${formId}-responses.csv`}
             className="flex items-center gap-1.5 rounded-[9px] border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold shadow-sm"
           >
             <Download size={12} /> CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => download(`${formId}-responses.json`, 'application/json', toJson(all))}
+          </a>
+          <a
+            href={exportHref(formId, 'json')}
+            download={`${formId}-responses.json`}
             className="flex items-center gap-1.5 rounded-[9px] border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] font-semibold shadow-sm"
           >
             <Download size={12} /> JSON
-          </button>
+          </a>
         </div>
       </div>
 
       {view === 'summary' ? (
         <div className="mt-6 space-y-4">
-          {summarize(snapshot, all).map((summary, index) => (
-            <SummaryCard key={summary.block.ref} summary={summary} index={index} />
+          {(summary.data?.summary ?? []).map((entry, index) => (
+            <SummaryCard key={entry.block.ref} summary={entry} index={index} />
           ))}
         </div>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-[260px_1fr]">
-          <ul className="space-y-1.5">
-            {all.map((response) => (
-              <li key={response.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(response.id)}
-                  aria-current={selected?.id === response.id}
-                  className={`w-full rounded-[10px] border px-3 py-2.5 text-left transition-colors ${
-                    selected?.id === response.id
-                      ? 'border-brand-ring bg-surface-2 shadow-sm'
-                      : 'border-line hover:bg-surface-hover'
-                  }`}
-                >
-                  <span className="block truncate text-[13px] font-medium">
-                    {firstAnswerExcerpt(snapshot, response)}
-                  </span>
-                  <span className="mt-0.5 block font-mono text-[10px] text-fg-3">
-                    {when(response.submittedAt)} · v{response.formVersion}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-2">
+            <ul className="space-y-1.5">
+              {loaded.map((response) => (
+                <li key={response.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(response.id)}
+                    aria-current={selected?.id === response.id}
+                    className={`w-full rounded-[10px] border px-3 py-2.5 text-left transition-colors ${
+                      selected?.id === response.id
+                        ? 'border-brand-ring bg-surface-2 shadow-sm'
+                        : 'border-line hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span className="block truncate text-[13px] font-medium">
+                      {firstAnswerExcerpt(snapshot, response)}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-fg-3">
+                      {when(response.submittedAt)} · v{response.formVersion}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {responses.hasNextPage && (
+              <button
+                type="button"
+                onClick={() => responses.fetchNextPage()}
+                disabled={responses.isFetchingNextPage}
+                className="w-full rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-[12.5px] font-medium text-fg-2 shadow-sm hover:bg-surface-hover disabled:opacity-60"
+              >
+                {responses.isFetchingNextPage ? 'Loading…' : 'Load more'}
+              </button>
+            )}
+          </div>
           {selected !== null && (
             <ResponseDetail
               formId={formId}

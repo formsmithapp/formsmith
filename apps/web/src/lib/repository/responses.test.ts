@@ -81,7 +81,7 @@ describe('add — the trust boundary rehearsal', () => {
       name: 'SubmissionRejectedError',
       issues: [expect.objectContaining({ code: 'variable_mismatch' })],
     })
-    expect(await responses.list(formId())).toEqual([])
+    expect((await responses.list(formId())).responses).toEqual([])
   })
 
   it('rejects a skipped required answer (required_skip)', async () => {
@@ -114,8 +114,52 @@ describe('list / get / remove / clear', () => {
   it('lists newest first', async () => {
     const first = await responses.add({ formId: formId(), answers: { plan: 'starter' } })
     const second = await responses.add({ formId: formId(), answers: { plan: 'pro' } })
-    const all = await responses.list(formId())
-    expect(all.map((r) => r.id)).toEqual([second.id, first.id])
+    const page = await responses.list(formId())
+    expect(page.responses.map((r) => r.id)).toEqual([second.id, first.id])
+    expect(page.nextCursor).toBeNull()
+  })
+
+  it('paginates by keyset cursor without overlap or gaps', async () => {
+    const added = []
+    for (let i = 0; i < 5; i += 1) {
+      added.push(await responses.add({ formId: formId(), answers: { plan: 'pro' } }))
+    }
+    const newestFirst = [...added].reverse().map((r) => r.id)
+
+    const first = await responses.list(formId(), { limit: 2 })
+    expect(first.responses.map((r) => r.id)).toEqual(newestFirst.slice(0, 2))
+    expect(first.nextCursor).not.toBeNull()
+
+    const second = await responses.list(formId(), {
+      limit: 2,
+      cursor: first.nextCursor ?? undefined,
+    })
+    expect(second.responses.map((r) => r.id)).toEqual(newestFirst.slice(2, 4))
+
+    const third = await responses.list(formId(), {
+      limit: 2,
+      cursor: second.nextCursor ?? undefined,
+    })
+    expect(third.responses.map((r) => r.id)).toEqual(newestFirst.slice(4))
+    expect(third.nextCursor).toBeNull()
+  })
+
+  it('summary reports the total and per-question counts server-parity', async () => {
+    await responses.add({ formId: formId(), answers: { plan: 'pro' } })
+    await responses.add({ formId: formId(), answers: { plan: 'pro' } })
+    await responses.add({ formId: formId(), answers: { plan: 'starter' } })
+
+    const { total, summary } = await responses.summary(formId())
+    expect(total).toBe(3)
+    const plan = summary.find((entry) => entry.block.ref === 'plan')
+    expect(plan?.kind).toBe('choices')
+    if (plan?.kind === 'choices') {
+      expect(plan.answered).toBe(3)
+      expect(plan.options).toEqual([
+        { label: 'Starter', count: 1 },
+        { label: 'Pro', count: 2 },
+      ])
+    }
   })
 
   it('get finds by id; remove deletes one; clear deletes all', async () => {
@@ -125,9 +169,9 @@ describe('list / get / remove / clear', () => {
 
     await responses.remove(formId(), a.id)
     expect(await responses.get(formId(), a.id)).toBeNull()
-    expect((await responses.list(formId())).map((r) => r.id)).toEqual([b.id])
+    expect((await responses.list(formId())).responses.map((r) => r.id)).toEqual([b.id])
 
     await responses.clear(formId())
-    expect(await responses.list(formId())).toEqual([])
+    expect((await responses.list(formId())).responses).toEqual([])
   })
 })

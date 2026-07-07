@@ -192,6 +192,113 @@ describe('the public surface', () => {
   })
 })
 
+describe('responses: pagination, summary, export', () => {
+  /** Publish `id` and submit `answers` as an anonymous respondent; returns the stored id. */
+  async function submit(id: string, answers: Record<string, unknown>): Promise<string> {
+    const prev = currentUser
+    currentUser = null
+    const res = await app.request(`/api/v1/f/${id}/responses`, json({ answers }))
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { id: string }
+    currentUser = prev
+    return body.id
+  }
+
+  async function seed(count: number): Promise<{ id: string; ids: string[] }> {
+    const id = await createForm()
+    await app.request(`/api/v1/forms/${id}/publish`, { method: 'POST' })
+    const ids: string[] = []
+    for (let i = 0; i < count; i += 1) {
+      ids.push(await submit(id, { plan: i % 2 === 0 ? 'pro' : 'starter' }))
+    }
+    return { id, ids }
+  }
+
+  it('keyset-paginates: pages tile the full set with no overlap or gaps', async () => {
+    const { id, ids } = await seed(3)
+
+    const page1 = (await (await app.request(`/api/v1/forms/${id}/responses?limit=2`)).json()) as {
+      responses: { id: string }[]
+      nextCursor: string | null
+    }
+    expect(page1.responses).toHaveLength(2)
+    expect(page1.nextCursor).not.toBeNull()
+
+    const page2 = (await (
+      await app.request(
+        `/api/v1/forms/${id}/responses?limit=2&cursor=${encodeURIComponent(page1.nextCursor ?? '')}`,
+      )
+    ).json()) as { responses: { id: string }[]; nextCursor: string | null }
+    expect(page2.responses).toHaveLength(1)
+    expect(page2.nextCursor).toBeNull()
+
+    const seen = [...page1.responses, ...page2.responses].map((r) => r.id)
+    expect(new Set(seen)).toEqual(new Set(ids)) // every id, exactly once
+  })
+
+  it('summary returns the total and per-question choice distribution', async () => {
+    const { id } = await seed(3) // pro, starter, pro
+
+    const summary = (await (await app.request(`/api/v1/forms/${id}/responses/summary`)).json()) as {
+      total: number
+      summary: {
+        block: { ref: string }
+        kind: string
+        options?: { label: string; count: number }[]
+      }[]
+    }
+    expect(summary.total).toBe(3)
+    const plan = summary.summary.find((entry) => entry.block.ref === 'plan')
+    expect(plan?.kind).toBe('choices')
+    expect(plan?.options).toEqual([
+      { label: 'Starter', count: 1 },
+      { label: 'Pro', count: 2 },
+    ])
+  })
+
+  it('summary on an unpublished form is empty, not a 404', async () => {
+    const id = await createForm()
+    const res = await app.request(`/api/v1/forms/${id}/responses/summary`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ total: 0, summary: [] })
+  })
+
+  it('streams a CSV export: header + one row per response', async () => {
+    const { id } = await seed(3)
+    const res = await app.request(`/api/v1/forms/${id}/responses/export?format=csv`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/csv')
+    expect(res.headers.get('content-disposition')).toContain('.csv')
+    const text = await res.text()
+    const lines = text.trim().split('\n')
+    expect(lines[0]).toBe('plan,submitted_at,version') // sole answerable block
+    expect(lines).toHaveLength(4) // header + 3 rows
+  })
+
+  it('streams a JSON export: a well-formed array of every response', async () => {
+    const { id, ids } = await seed(3)
+    const res = await app.request(`/api/v1/forms/${id}/responses/export?format=json`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    const rows = (await res.json()) as { id: string }[]
+    expect(rows).toHaveLength(3)
+    expect(new Set(rows.map((r) => r.id))).toEqual(new Set(ids))
+  })
+
+  it("another workspace cannot read a form's summary or export (404)", async () => {
+    const { id } = await seed(2)
+    currentUser = 'mallory'
+    expect((await app.request(`/api/v1/forms/${id}/responses/summary`)).status).toBe(404)
+    expect((await app.request(`/api/v1/forms/${id}/responses/export`)).status).toBe(404)
+    // the list endpoint scopes by the forms join, so it yields an empty page
+    // (no leak); tightening it to 404 is the v0.1.5 cross-tenant authz pass.
+    const list = (await (await app.request(`/api/v1/forms/${id}/responses?limit=5`)).json()) as {
+      responses: unknown[]
+    }
+    expect(list.responses).toEqual([])
+  })
+})
+
 describe('import', () => {
   it('imports forms with their snapshots; echoes the source ids', async () => {
     const res = await app.request(
@@ -367,7 +474,21 @@ describe('S3: meta + openapi', () => {
     const body = (await spec.json()) as { openapi: string; paths: Record<string, unknown> }
     expect(body.openapi).toBe('3.1.0')
     expect(Object.keys(body.paths)).toEqual(
-      expect.arrayContaining(['/api/v1/f/{id}', '/api/v1/forms', '/api/v1/api-keys']),
+      expect.arrayContaining([
+        '/api/v1/f/{id}',
+        '/api/v1/forms',
+        '/api/v1/api-keys',
+        '/api/v1/forms/{id}/responses/summary',
+      ]),
+    )
+    // the paginated list documents its query params from the Zod schema
+    const listGet = (
+      body.paths['/api/v1/forms/{id}/responses'] as {
+        get: { parameters: { name: string }[] }
+      }
+    ).get
+    expect(listGet.parameters.map((p) => p.name)).toEqual(
+      expect.arrayContaining(['limit', 'cursor']),
     )
   })
 })

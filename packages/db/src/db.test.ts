@@ -107,7 +107,7 @@ describe('forms repository (workspace-scoped)', () => {
       ending: 'thanks',
     })
     expect(await formsRepo.remove(wsA.id, created.id)).toBe(true)
-    expect(await responsesRepo.list(wsA.id, created.id)).toEqual([])
+    expect((await responsesRepo.list(wsA.id, created.id)).responses).toEqual([])
     expect(await formsRepo.getSnapshot(wsA.id, created.id, 1)).toBeNull()
   })
 })
@@ -133,12 +133,91 @@ describe('responses repository', () => {
       .values({ ...base, answers: { name: 'Grace' }, submittedAt: new Date(Date.now() + 1000) })
 
     const list = await repo.list(wsA.id, created.id)
-    expect(list).toHaveLength(2)
-    expect(list[0]?.answers).toEqual({ name: 'Grace' }) // newest first
-    expect(await repo.list(wsB.id, created.id)).toEqual([]) // scoped
+    expect(list.responses).toHaveLength(2)
+    expect(list.responses[0]?.answers).toEqual({ name: 'Grace' }) // newest first
+    expect((await repo.list(wsB.id, created.id)).responses).toEqual([]) // scoped
 
     expect(await repo.remove(wsB.id, created.id, first.id)).toBe(false) // scoped
     expect(await repo.remove(wsA.id, created.id, first.id)).toBe(true)
-    expect((await repo.list(wsA.id, created.id)).map((r) => r.id)).not.toContain(first.id)
+    expect((await repo.list(wsA.id, created.id)).responses.map((r) => r.id)).not.toContain(first.id)
+  })
+
+  it('keyset-paginates newest-first, no overlap or gaps, clamps the limit', async () => {
+    const formsRepo = formsRepository(db)
+    const repo = responsesRepository(db)
+    const created = await formsRepo.create(wsA.id, doc())
+    await formsRepo.publish(wsA.id, created.id)
+
+    const schema = (await import('./schema')).responses
+    // strictly increasing timestamps → a deterministic newest-first order
+    const base = Date.now()
+    const ids: string[] = []
+    for (let i = 0; i < 5; i += 1) {
+      const [row] = await db
+        .insert(schema)
+        .values({
+          formId: created.id,
+          formVersion: 1,
+          answers: { name: `r${i}` },
+          variables: {},
+          hidden: {},
+          ending: 'thanks',
+          submittedAt: new Date(base + i * 1000),
+        })
+        .returning()
+      if (row !== undefined) ids.push(row.id)
+    }
+    const newestFirst = [...ids].reverse() // inserted oldest→newest, listed newest→oldest
+
+    const page1 = await repo.list(wsA.id, created.id, { limit: 2 })
+    expect(page1.responses.map((r) => r.id)).toEqual(newestFirst.slice(0, 2))
+    expect(page1.nextCursor).not.toBeNull()
+
+    const page2 = await repo.list(wsA.id, created.id, {
+      limit: 2,
+      cursor: page1.nextCursor ?? undefined,
+    })
+    expect(page2.responses.map((r) => r.id)).toEqual(newestFirst.slice(2, 4))
+
+    const page3 = await repo.list(wsA.id, created.id, {
+      limit: 2,
+      cursor: page2.nextCursor ?? undefined,
+    })
+    expect(page3.responses.map((r) => r.id)).toEqual(newestFirst.slice(4))
+    expect(page3.nextCursor).toBeNull()
+
+    // limit clamps to [1, 200]; a garbage cursor falls back to the first page
+    expect((await repo.list(wsA.id, created.id, { limit: 9999 })).responses).toHaveLength(5)
+    expect((await repo.list(wsA.id, created.id, { limit: 0 })).responses).toHaveLength(1)
+    expect(
+      (await repo.list(wsA.id, created.id, { cursor: 'not-a-cursor' })).responses,
+    ).toHaveLength(5)
+  })
+
+  it('walk() streams every row in newest-first batches', async () => {
+    const formsRepo = formsRepository(db)
+    const repo = responsesRepository(db)
+    const created = await formsRepo.create(wsA.id, doc())
+    await formsRepo.publish(wsA.id, created.id)
+
+    const schema = (await import('./schema')).responses
+    const base = Date.now()
+    for (let i = 0; i < 7; i += 1) {
+      await db.insert(schema).values({
+        formId: created.id,
+        formVersion: 1,
+        answers: { name: `r${i}` },
+        variables: {},
+        hidden: {},
+        ending: 'thanks',
+        submittedAt: new Date(base + i * 1000),
+      })
+    }
+
+    const seen: string[] = []
+    for await (const batch of repo.walk(wsA.id, created.id, 3)) {
+      seen.push(...batch.map((r) => r.answers.name as string))
+    }
+    expect(seen).toEqual(['r6', 'r5', 'r4', 'r3', 'r2', 'r1', 'r0'])
   })
 })

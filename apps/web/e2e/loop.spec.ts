@@ -65,7 +65,8 @@ test('the full local-first loop: template → publish → /f/:id → results →
   // 5 · CSV export contains the row (raw ids — round-trippable)
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'CSV' }).click(),
+    // the export is now a native streaming download link (role: link, not button)
+    page.getByRole('link', { name: 'CSV' }).click(),
   ])
   const csvPath = await download.path()
   const csv = readFileSync(csvPath, 'utf8')

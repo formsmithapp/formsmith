@@ -1,7 +1,12 @@
 // Copyright (C) 2026 Gnana Siva Sai V and Formsmith contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { evaluateSubmission, type SubmissionIssue } from '@formsmithapp/engine'
+import {
+  evaluateSubmission,
+  type QuestionSummary,
+  type SubmissionIssue,
+  summarize,
+} from '@formsmithapp/engine'
 import type { StorageLike } from './local'
 import type { FormsRepository } from './types'
 
@@ -79,17 +84,47 @@ export class SubmissionRejectedError extends Error {
   }
 }
 
+export interface ListOptions {
+  /** Opaque keyset cursor from a previous page's `nextCursor`. */
+  cursor?: string
+  /** Page size; server clamps to [1, 200], default 50. */
+  limit?: number
+}
+
+export interface ResponsePage {
+  responses: StoredResponse[]
+  /** Feed back as `cursor` for the next page, or null when exhausted. */
+  nextCursor: string | null
+}
+
+/** Per-question summary + total response count, computed server-side. */
+export interface ResponseSummary {
+  total: number
+  summary: QuestionSummary[]
+}
+
 export interface ResponsesRepository {
   /** Re-evaluates against the pinned snapshot; stores; rejects invalid. */
   add(payload: ResponsePayload): Promise<StoredResponse>
-  /** Newest first. */
-  list(formId: string): Promise<StoredResponse[]>
+  /** One keyset page, newest first. */
+  list(formId: string, options?: ListOptions): Promise<ResponsePage>
+  /** Aggregate summary over the latest published snapshot. */
+  summary(formId: string): Promise<ResponseSummary>
   get(formId: string, responseId: string): Promise<StoredResponse | null>
   remove(formId: string, responseId: string): Promise<void>
   clear(formId: string): Promise<void>
 }
 
 const responsesKey = (formId: string) => `fs.responses.${formId}`
+
+const DEFAULT_LIMIT = 50
+const MAX_LIMIT = 200
+const clampLimit = (limit: number | undefined): number =>
+  Math.min(Math.max(1, Math.trunc(limit ?? DEFAULT_LIMIT)), MAX_LIMIT)
+
+/** Opaque local cursor. Never crosses to the server, so any stable encoding works. */
+const encodeCursor = (response: StoredResponse): string =>
+  btoa(`${response.submittedAt}|${response.id}`)
 
 export class LocalStorageResponsesRepository implements ResponsesRepository {
   constructor(
@@ -143,8 +178,27 @@ export class LocalStorageResponsesRepository implements ResponsesRepository {
     return response
   }
 
-  async list(formId: string): Promise<StoredResponse[]> {
-    return this.read(formId)
+  async list(formId: string, options: ListOptions = {}): Promise<ResponsePage> {
+    const limit = clampLimit(options.limit)
+    // read() is already newest-first (add prepends); slice keeps that order.
+    const all = this.read(formId)
+    const start =
+      options.cursor === undefined
+        ? 0
+        : all.findIndex((response) => encodeCursor(response) === options.cursor) + 1
+    const page = all.slice(start, start + limit)
+    const last = page[page.length - 1]
+    const nextCursor = start + limit < all.length && last !== undefined ? encodeCursor(last) : null
+    return { responses: page, nextCursor }
+  }
+
+  async summary(formId: string): Promise<ResponseSummary> {
+    const stored = await this.forms.get(formId)
+    const version = stored?.publishedVersion
+    const snapshot = version !== undefined ? await this.forms.getSnapshot(formId, version) : null
+    const all = this.read(formId)
+    if (snapshot === null) return { total: all.length, summary: [] }
+    return { total: all.length, summary: summarize(snapshot, all) }
   }
 
   async get(formId: string, responseId: string): Promise<StoredResponse | null> {

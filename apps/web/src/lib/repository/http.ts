@@ -4,7 +4,10 @@
 import type { FormDefinition } from '@formsmithapp/engine'
 import { starterForm } from '../seed'
 import {
+  type ListOptions,
+  type ResponsePage,
   type ResponsePayload,
+  type ResponseSummary,
   type ResponsesRepository,
   type StoredResponse,
   SubmissionRejectedError,
@@ -114,9 +117,20 @@ export class HttpResponsesRepository implements ResponsesRepository {
     return body
   }
 
-  async list(formId: string): Promise<StoredResponse[]> {
-    const { body } = await request<{ responses: StoredResponse[] }>(`/forms/${formId}/responses`)
-    return body?.responses ?? []
+  async list(formId: string, options: ListOptions = {}): Promise<ResponsePage> {
+    const params = new URLSearchParams()
+    if (options.limit !== undefined) params.set('limit', String(options.limit))
+    if (options.cursor !== undefined) params.set('cursor', options.cursor)
+    const query = params.toString()
+    const { body } = await request<{ responses: StoredResponse[]; nextCursor: string | null }>(
+      `/forms/${formId}/responses${query !== '' ? `?${query}` : ''}`,
+    )
+    return { responses: body?.responses ?? [], nextCursor: body?.nextCursor ?? null }
+  }
+
+  async summary(formId: string): Promise<ResponseSummary> {
+    const { body } = await request<ResponseSummary>(`/forms/${formId}/responses/summary`)
+    return { total: body?.total ?? 0, summary: body?.summary ?? [] }
   }
 
   async get(formId: string, responseId: string): Promise<StoredResponse | null> {
@@ -131,7 +145,12 @@ export class HttpResponsesRepository implements ResponsesRepository {
   }
 
   async clear(formId: string): Promise<void> {
-    const all = await this.list(formId)
-    for (const response of all) await this.remove(formId, response.id)
+    // Delete-then-refetch the first page until the form is empty; keyset pages
+    // would otherwise shift underneath a cursor as rows are removed.
+    let page = await this.list(formId, { limit: 200 })
+    while (page.responses.length > 0) {
+      for (const response of page.responses) await this.remove(formId, response.id)
+      page = await this.list(formId, { limit: 200 })
+    }
   }
 }

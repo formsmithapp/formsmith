@@ -20,7 +20,12 @@ import {
 } from '@formsmithapp/db'
 import {
   createSubmissionEvaluator,
+  createSummaryFolder,
+  csvHeader,
+  csvRow,
+  exportRefs,
   type FormDefinition,
+  type ResultsResponse,
   type SubmissionEvaluator,
 } from '@formsmithapp/engine'
 import {
@@ -104,6 +109,44 @@ const responseRowDto = z.object({
   ending: z.string().nullable(),
   aiTrace: z.array(z.unknown()).nullable(),
 })
+const responsePageDto = z.object({
+  responses: z.array(responseRowDto),
+  nextCursor: z.string().nullable(),
+})
+const listResponsesQuery = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .openapi({ description: 'Page size (1 to 200, default 50)', example: 50 }),
+  cursor: z.string().optional().openapi({ description: 'Opaque keyset cursor from nextCursor' }),
+})
+const summaryBlockDto = z.object({ ref: z.string(), title: z.string(), type: z.string() })
+const questionSummaryDto = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('choices'),
+    block: summaryBlockDto,
+    answered: z.number(),
+    options: z.array(z.object({ label: z.string(), count: z.number() })),
+  }),
+  z.object({
+    kind: z.literal('numeric'),
+    block: summaryBlockDto,
+    answered: z.number(),
+    average: z.number(),
+    min: z.number(),
+    max: z.number(),
+    histogram: z.array(z.object({ value: z.number(), count: z.number() })),
+  }),
+  z.object({
+    kind: z.literal('texts'),
+    block: summaryBlockDto,
+    answered: z.number(),
+    latest: z.array(z.object({ text: z.string(), submittedAt: z.string() })),
+  }),
+])
 const aiStepDto = z.object({
   done: z.boolean(),
   reason: z.string().optional(),
@@ -320,6 +363,32 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
     ending: string | null
     aiTrace: unknown[] | null
   }) => ({ ...row, submittedAt: row.submittedAt.toISOString() })
+
+  const toResultsResponse = (row: {
+    answers: Record<string, unknown>
+    submittedAt: Date
+    formVersion: number
+  }): ResultsResponse => ({
+    answers: row.answers,
+    submittedAt: row.submittedAt.toISOString(),
+    formVersion: row.formVersion,
+  })
+
+  /**
+   * Resolves a workspace-owned form to its latest published snapshot. Returns
+   * null when the form is absent from the workspace (caller answers 404); the
+   * inner `snapshot` is null for a form that was never published (no responses,
+   * so summary/export are legitimately empty).
+   */
+  const ownedSnapshot = async (
+    workspaceId: string,
+    formId: string,
+  ): Promise<{ snapshot: FormDefinition | null } | null> => {
+    const form = await forms.get(workspaceId, formId)
+    if (form === null) return null
+    if (form.publishedVersion === null) return { snapshot: null }
+    return { snapshot: await forms.getSnapshot(workspaceId, formId, form.publishedVersion) }
+  }
 
   const clientIp = (headers: Headers) =>
     headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
@@ -786,21 +855,139 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
       method: 'get',
       path: '/forms/{id}/responses',
       tags: ['responses'],
-      summary: 'List responses (newest first)',
+      summary: 'List responses (newest first, keyset-paginated)',
       security: [{ bearerAuth: [] }],
-      request: { params: idParam },
+      request: { params: idParam, query: listResponsesQuery },
       responses: {
-        200: jsonResponse(z.object({ responses: z.array(responseRowDto) }), 'Responses'),
+        200: jsonResponse(responsePageDto, 'A page of responses + the next cursor'),
         404: jsonResponse(errorDto, 'Not found in this workspace'),
       },
     }),
     async (c) => {
       const { id } = c.req.valid('param')
       if (!isUuid(id)) return c.json(NOT_FOUND, 404)
-      const rows = await responses.list(c.get('workspaceId'), id)
-      return c.json({ responses: rows.map(responseJson) }, 200)
+      const { limit, cursor } = c.req.valid('query')
+      const page = await responses.list(c.get('workspaceId'), id, { limit, cursor })
+      return c.json(
+        { responses: page.responses.map(responseJson), nextCursor: page.nextCursor },
+        200,
+      )
     },
   )
+
+  // NOTE: `/responses/summary` and `/responses/export` MUST register before
+  // `/responses/{responseId}` — Hono matches routes in registration order, so
+  // the param route would otherwise swallow these literal paths.
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/forms/{id}/responses/summary',
+      tags: ['responses'],
+      summary: 'Per-question summary over the latest published snapshot',
+      security: [{ bearerAuth: [] }],
+      request: { params: idParam },
+      responses: {
+        200: jsonResponse(
+          z.object({ total: z.number(), summary: z.array(questionSummaryDto) }),
+          'Per-question summary + total response count',
+        ),
+        404: jsonResponse(errorDto, 'Not found in this workspace'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param')
+      if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+      const workspaceId = c.get('workspaceId')
+      const owned = await ownedSnapshot(workspaceId, id)
+      if (owned === null) return c.json(NOT_FOUND, 404)
+      if (owned.snapshot === null) return c.json({ total: 0, summary: [] }, 200)
+
+      const folder = createSummaryFolder(owned.snapshot)
+      for await (const batch of responses.walk(workspaceId, id)) {
+        folder.add(batch.map(toResultsResponse))
+      }
+      const { total, questions } = folder.finalize()
+      return c.json({ total, summary: questions }, 200)
+    },
+  )
+
+  // Plain (non-OpenAPI) route: streams a response body, so it sidesteps the
+  // typed-JSON handler contract. `/forms/*` middleware still applies.
+  app.get('/forms/:id/responses/export', async (c) => {
+    const id = c.req.param('id')
+    if (!isUuid(id)) return c.json(NOT_FOUND, 404)
+    const workspaceId = c.get('workspaceId')
+    const owned = await ownedSnapshot(workspaceId, id)
+    if (owned === null) return c.json(NOT_FOUND, 404)
+
+    const format = c.req.query('format') === 'json' ? 'json' : 'csv'
+    const snapshot = owned.snapshot
+    const encoder = new TextEncoder()
+    // One batch enqueued per pull() so the stream honors backpressure: memory
+    // stays bounded to a single page + whatever the client has not yet drained.
+    const iterator = responses.walk(workspaceId, id)[Symbol.asyncIterator]()
+
+    if (format === 'json') {
+      let opened = false
+      let first = true
+      const body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          if (!opened) {
+            controller.enqueue(encoder.encode('['))
+            opened = true
+          }
+          const { value, done } = await iterator.next()
+          if (done === true) {
+            controller.enqueue(encoder.encode(']'))
+            controller.close()
+            return
+          }
+          for (const row of value) {
+            controller.enqueue(
+              encoder.encode((first ? '' : ',') + JSON.stringify(responseJson(row))),
+            )
+            first = false
+          }
+        },
+        cancel: () => void iterator.return?.(undefined),
+      })
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'content-disposition': `attachment; filename="${id}-responses.json"`,
+        },
+      })
+    }
+
+    const refs = snapshot !== null ? exportRefs(snapshot) : []
+    const header = snapshot !== null ? csvHeader(snapshot) : 'submitted_at,version'
+    let wroteHeader = false
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (!wroteHeader) {
+          controller.enqueue(encoder.encode(header))
+          wroteHeader = true
+        }
+        const { value, done } = await iterator.next()
+        if (done === true) {
+          controller.close()
+          return
+        }
+        for (const row of value) {
+          controller.enqueue(encoder.encode(`\n${csvRow(refs, toResultsResponse(row))}`))
+        }
+      },
+      cancel: () => void iterator.return?.(undefined),
+    })
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${id}-responses.csv"`,
+      },
+    })
+  })
 
   app.openapi(
     createRoute({
