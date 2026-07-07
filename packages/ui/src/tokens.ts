@@ -82,7 +82,10 @@ export const darkTokens = {
   'border-soft': '#232e28',
   text: '#ebeee7',
   'text-2': '#aeb6ac',
-  'text-3': '#79817a',
+  // Lightened from #79817a to meet WCAG 1.4.3 (4.5:1) as small muted text in
+  // dark theme: the old value was 4.1:1 on the dark surface and 3.5:1 on dark
+  // brand-soft. This clears both (5.6:1 / 4.7:1).
+  'text-3': '#8f9890',
   'on-brand': '#0e1512',
 
   'shadow-sm': '0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3)',

@@ -43,20 +43,32 @@ async function createFormWithQuestion(page: Page): Promise<string> {
   return formId
 }
 
-test('a11y: the builder page has no critical/serious axe violations', async ({ page }) => {
+async function auditBuilder(page: Page, label: string) {
   await createFormWithQuestion(page)
-  await scan(page, 'builder /forms/:id/create')
-})
+  await scan(page, label)
+}
 
-test('a11y: a published respondent page has no critical/serious axe violations', async ({
-  page,
-}) => {
+async function auditPublished(page: Page, label: string) {
   const formId = await createFormWithQuestion(page)
-
   await page.getByRole('button', { name: 'Publish' }).click()
   await expect(page.getByText(/Published v1/)).toBeVisible()
-
   await page.goto(`/f/${formId}`)
   await expect(page.locator('.fsr-root')).toBeVisible()
-  await scan(page, 'published /f/:id')
+  await scan(page, label)
+}
+
+test('a11y: the builder page (light) has no critical/serious violations', ({ page }) =>
+  auditBuilder(page, 'builder (light)'))
+test('a11y: a published page (light) has no critical/serious violations', ({ page }) =>
+  auditPublished(page, 'published (light)'))
+
+// Dark theme: colorScheme:'dark' makes the pre-paint script set data-theme=dark
+// on the builder chrome and the auto-themed respondent runtime follow suit.
+test.describe('dark theme', () => {
+  test.use({ colorScheme: 'dark' })
+
+  test('a11y: the builder page (dark) has no critical/serious violations', ({ page }) =>
+    auditBuilder(page, 'builder (dark)'))
+  test('a11y: a published page (dark) has no critical/serious violations', ({ page }) =>
+    auditPublished(page, 'published (dark)'))
 })

@@ -285,14 +285,14 @@ it('themeVars land as inline custom properties and WIN over the stylesheet', asy
   expect(getComputedStyle(root).backgroundColor).toBe('rgb(253, 246, 236)')
 })
 
-it('has no serious/critical axe violations across screens, control types, an error, and the ending', async () => {
-  const { engine, host } = mountForm(kitchenSink(), {}, { visitor: 'Ada' })
+async function auditAllStates(theme: 'light' | 'dark') {
+  const { engine, host } = mountForm(kitchenSink(), { theme }, { visitor: 'Ada' })
   const clean = async (label: string) => {
     const results = await axe.run(host)
     const serious = results.violations.filter(
       (v) => v.impact === 'serious' || v.impact === 'critical',
     )
-    expect(serious, `${label}\n${JSON.stringify(serious, null, 2)}`).toEqual([])
+    expect(serious, `[${theme}] ${label}\n${JSON.stringify(serious, null, 2)}`).toEqual([])
   }
 
   await settled(host, 'Welcome Ada')
@@ -342,7 +342,12 @@ it('has no serious/critical axe violations across screens, control types, an err
   engine.next() // ending
   await settled(host, 'Done, Ada!')
   await clean('ending screen')
-})
+}
+
+it('axe: no serious/critical violations across all states (light theme)', () =>
+  auditAllStates('light'))
+it('axe: no serious/critical violations across all states (dark theme)', () =>
+  auditAllStates('dark'))
 
 it('AI EXCHANGE LOOP: base answer → generated questions → exchanges ride the payload', async () => {
   const onSubmit = vi.fn().mockResolvedValue(undefined)
