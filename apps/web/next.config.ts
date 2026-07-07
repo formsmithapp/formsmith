@@ -12,7 +12,7 @@ import type { NextConfig } from 'next'
  * only in dev for react-refresh); img-src allows https anywhere because form
  * themes may point logoUrl at the author's own host.
  */
-// Turnstile (v0.1.5 §B) needs its script + widget iframe allow-listed. Only
+// Turnstile needs its script + widget iframe allow-listed. Only
 // widened when Turnstile is configured, so the self-host default CSP stays tight.
 const turnstileOn =
   process.env.TURNSTILE_SECRET_KEY !== undefined && process.env.TURNSTILE_SITE_KEY !== undefined

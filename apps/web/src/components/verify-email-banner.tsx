@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { authClient, useSession } from '@/lib/auth-client'
 
 /**
- * Quiet reminder (v0.1.5 §B): when the instance requires verification and the
+ * Quiet reminder: when the instance requires verification and the
  * signed-in account has not confirmed its email yet, nudge them. Building and
  * previewing stay open; publishing and AI are what need the verified email.
  * Renders nothing when verification is off or the account is already verified.

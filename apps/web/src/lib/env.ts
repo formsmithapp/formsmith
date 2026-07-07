@@ -47,14 +47,19 @@ const envSchema = z.object({
    * runtime, never NEXT_PUBLIC, so one image serves any instance). */
   TURNSTILE_SECRET_KEY: z.string().optional(),
   TURNSTILE_SITE_KEY: z.string().optional(),
+  /** Optional host split. Set to a dedicated public-forms host to serve
+   * respondent pages on their own host; unset = single-host, current behavior
+   * untouched. The proxy reads process.env directly; this documents it and keeps
+   * validation uniform. The app host is derived from BETTER_AUTH_URL. */
+  FORMSMITH_FORMS_HOST: z.string().optional(),
   /** Lets webhook deliveries reach private/loopback addresses (e.g. n8n on the same box). */
   WEBHOOK_ALLOW_PRIVATE: z.string().optional(),
   /** Public submit endpoint rate limit per ip+form, per minute. Default 60. */
   FORMSMITH_SUBMIT_RATE: z.coerce.number().int().positive().optional(),
   /** Max entries in the in-memory cache (snapshots, rate windows). Default 500. */
   FORMSMITH_CACHE_MAX_ITEMS: z.coerce.number().int().positive().optional(),
-  /** AI credits + workspace quotas (v0.1.5). Every one unset = unlimited (the
-   * self-host default); the hosted instance sets strict values. Generic core. */
+  /** AI credits + workspace quotas. Every one unset = unlimited (the default);
+   * set strict values to meter usage. Generic core, no deployment-specific paths. */
   FORMSMITH_AI_CREDITS_DEFAULT: z.coerce.number().int().nonnegative().optional(),
   /** Credits spent per AI form generation. Default 5. (Exchanges cost 1.) */
   FORMSMITH_AI_GENERATION_COST: z.coerce.number().int().positive().optional(),

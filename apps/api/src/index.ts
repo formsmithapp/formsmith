@@ -60,8 +60,8 @@ export interface ApiDeps {
   db: Database
   /** Resolves the signed-in user from request headers (Better Auth in v1). */
   getSession: (headers: Headers) => Promise<{ userId: string; emailVerified: boolean } | null>
-  /** Require a verified email to publish + use AI (v0.1.5). Off by default;
-   * when on, unverified SESSION accounts can still build/preview. */
+  /** Require a verified email to publish + use AI. Off by default; when on,
+   * unverified SESSION accounts can still build/preview. */
   requireVerifiedEmail?: boolean
   /** Background jobs (webhooks, notifications). Absent → integrations 503. */
   queue?: QueueAdapter
@@ -78,8 +78,8 @@ export interface ApiDeps {
    * Absent → an internal in-memory LRU. Wrapped fail-open either way: a
    * broken cache slows requests down, it never fails them. */
   cache?: CacheAdapter
-  /** AI credits + workspace quotas (v0.1.5). Every field unset = unlimited
-   * (self-host default); the hosted instance passes strict values. */
+  /** AI credits + workspace quotas. Every field unset = unlimited (the default);
+   * pass strict values to meter usage. */
   quotas?: {
     /** Granted per workspace on first AI charge; unset = unlimited (no ledger). */
     aiCreditsDefault?: number
@@ -222,7 +222,7 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   const todayUtc = () => new Date().toISOString().slice(0, 10)
   const monthUtc = () => new Date().toISOString().slice(0, 7)
 
-  /* ---------- quotas + AI credits (v0.1.5) — every limit unset = unlimited ---------- */
+  /* ---------- quotas + AI credits (every limit unset = unlimited) ---------- */
 
   const AI_EXCHANGE_COST = 1
   const aiGenerationCost = deps.quotas?.aiGenerationCost ?? 5
@@ -330,10 +330,9 @@ export function createApi(deps: ApiDeps, basePath = '/api/v1') {
   })
 
   /**
-   * The verified-email soft gate (v0.1.5 §B). Only bites when the instance
-   * requires verification AND this is an unverified interactive session; API
-   * keys and the verification-off default sail through. Returns a 403 body to
-   * send, or null to proceed.
+   * The verified-email soft gate. Only bites when the instance requires
+   * verification AND this is an unverified interactive session; API keys and the
+   * verification-off default sail through. Returns a 403 body, or null to proceed.
    */
   const verifiedGate = (c: Context<Env>): { error: string } | null =>
     deps.requireVerifiedEmail === true &&

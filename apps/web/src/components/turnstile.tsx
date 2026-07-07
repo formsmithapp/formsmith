@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * Cloudflare Turnstile widget (v0.1.5 §B), explicit-render. Rendered only when
+ * Cloudflare Turnstile widget, explicit-render. Rendered only when
  * the instance sets a site key (self-host default: off, so this never loads).
  * The token is handed up via `onToken` and forwarded on the auth request as the
  * `x-captcha-response` header the Better Auth captcha plugin verifies.

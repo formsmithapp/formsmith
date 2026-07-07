@@ -11,10 +11,10 @@ import { envFlag, serverEnv } from './env'
 import { getMail } from './workers'
 
 /**
- * Whether the instance ENFORCES email verification (v0.1.5 §B). Off by default.
- * Fail-open safety net: if the flag is on but no mail sender is configured we
- * do NOT enforce (and warn loudly), so a self-hoster mid-setup is never locked
- * out of their own instance. Hosted sets the flag AND SMTP, so it enforces.
+ * Whether the instance ENFORCES email verification. Off by default. Fail-open
+ * safety net: if the flag is on but no mail sender is configured we do NOT
+ * enforce (and warn loudly), so an operator mid-setup is never locked out of
+ * their own instance. Set the flag AND a mail sender (SMTP) to enforce.
  */
 export function emailVerificationRequired(): boolean {
   if (!envFlag(serverEnv().FORMSMITH_REQUIRE_EMAIL_VERIFICATION)) return false
@@ -47,6 +47,11 @@ function buildAuth() {
   // every sign-in, so both-or-neither.
   const turnstileOn = env.TURNSTILE_SECRET_KEY !== undefined && env.TURNSTILE_SITE_KEY !== undefined
   return betterAuth({
+    // baseURL pins auth (and its host-only session cookie) to the app host.
+    // CRITICAL when the host split is enabled: do NOT enable
+    // advanced.crossSubDomainCookies or set a shared parent-domain cookie, or the
+    // session would leak onto the public forms host. Default cookies are
+    // host-only, which is what we want.
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(getDb(), { provider: 'pg', schema }),
