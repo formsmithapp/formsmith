@@ -431,13 +431,29 @@ export function Panel({
       aria-label="Block settings"
       className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-line bg-surface"
     >
-      <div className="grid grid-cols-2 gap-1 border-b border-line p-2">
+      <div
+        role="tablist"
+        aria-label="Panel view"
+        className="grid grid-cols-2 gap-1 border-b border-line p-2"
+      >
         {(['content', 'design'] as const).map((id) => (
           <button
             key={id}
             type="button"
-            aria-pressed={tab === id}
+            role="tab"
+            id={`panel-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={tab === id ? 'panel-tabpanel' : undefined}
+            tabIndex={tab === id ? 0 : -1}
             onClick={() => setTab(id)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault()
+                const next = id === 'content' ? 'design' : 'content'
+                setTab(next)
+                document.getElementById(`panel-tab-${next}`)?.focus()
+              }
+            }}
             className={`rounded-[7px] px-2 py-1.5 text-[12px] font-semibold capitalize transition-colors ${
               tab === id ? 'bg-surface-2 shadow-sm' : 'text-fg-3 hover:text-fg'
             }`}
@@ -446,7 +462,9 @@ export function Panel({
           </button>
         ))}
       </div>
-      {tab === 'design' ? <DesignPanel /> : <BlockPanel block={block} onToast={onToast} />}
+      <div role="tabpanel" id="panel-tabpanel" aria-labelledby={`panel-tab-${tab}`}>
+        {tab === 'design' ? <DesignPanel /> : <BlockPanel block={block} onToast={onToast} />}
+      </div>
     </aside>
   )
 }

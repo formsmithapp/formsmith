@@ -23,7 +23,7 @@ test('design tab themes canvas + preview live, publish pins the theme', async ({
   // brand it violet on a dark ground, set the literary pair
   await panel.getByRole('tab', { name: /design/i }).click()
   await panel.getByRole('button', { name: 'Brand swatch Violet' }).click()
-  await panel.getByRole('button', { name: /^dark$/i }).click()
+  await panel.getByRole('radio', { name: /^dark$/i }).click()
   await panel.getByRole('button', { name: /Literary/ }).click()
 
   // the canvas re-tokens itself to the form's theme, live
