@@ -285,27 +285,63 @@ it('themeVars land as inline custom properties and WIN over the stylesheet', asy
   expect(getComputedStyle(root).backgroundColor).toBe('rgb(253, 246, 236)')
 })
 
-it('has no serious or critical axe violations on screens and questions', async () => {
+it('has no serious/critical axe violations across screens, control types, an error, and the ending', async () => {
   const { engine, host } = mountForm(kitchenSink(), {}, { visitor: 'Ada' })
+  const clean = async (label: string) => {
+    const results = await axe.run(host)
+    const serious = results.violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical',
+    )
+    expect(serious, `${label}\n${JSON.stringify(serious, null, 2)}`).toEqual([])
+  }
+
   await settled(host, 'Welcome Ada')
+  await clean('welcome screen')
 
-  const atWelcome = await axe.run(host)
-  const seriousAtWelcome = atWelcome.violations.filter(
-    (v) => v.impact === 'serious' || v.impact === 'critical',
-  )
-  expect(seriousAtWelcome, JSON.stringify(seriousAtWelcome, null, 2)).toEqual([])
-
+  // Required-empty error state: try to advance the required name question empty.
   await userEvent.keyboard('{Enter}')
   await settled(host, 'Name?')
+  await userEvent.keyboard('{Enter}')
+  await vi.waitFor(() => expect(host.querySelector('.fsr-error')).not.toBeNull())
+  await clean('required-empty error state')
+
   engine.setAnswer('name', 'Ada')
   engine.next()
   await settled(host, 'Email?')
+  await clean('text / email input')
 
-  const atQuestion = await axe.run(host)
-  const seriousAtQuestion = atQuestion.violations.filter(
-    (v) => v.impact === 'serious' || v.impact === 'critical',
-  )
-  expect(seriousAtQuestion, JSON.stringify(seriousAtQuestion, null, 2)).toEqual([])
+  engine.setAnswer('email', 'ada@lovelace.dev')
+  engine.next() // bio (optional)
+  engine.next() // age (optional)
+  engine.next() // birthday (optional)
+  await settled(host, 'Birthday?')
+  await clean('date fieldset')
+
+  engine.next() // color dropdown (optional)
+  await settled(host, 'Favorite color?')
+  await clean('dropdown combobox (closed)')
+
+  engine.next() // plan (required single-select)
+  await settled(host, 'Pick a plan')
+  await clean('single-select radiogroup')
+
+  engine.setAnswer('plan', 'pro')
+  engine.next()
+  engine.setAnswer('pets', ['dog'])
+  engine.next()
+  engine.setAnswer('confirm', true)
+  engine.next()
+  engine.setAnswer('terms', true)
+  engine.next()
+  await settled(host, 'How satisfied are you?')
+  await clean('opinion scale')
+
+  engine.next() // nps
+  engine.next() // ai follow-up (optional, no handler → advances)
+  engine.next() // statement
+  engine.next() // ending
+  await settled(host, 'Done, Ada!')
+  await clean('ending screen')
 })
 
 it('AI EXCHANGE LOOP: base answer → generated questions → exchanges ride the payload', async () => {

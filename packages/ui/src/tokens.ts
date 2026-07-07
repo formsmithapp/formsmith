@@ -33,7 +33,10 @@ export const lightTokens = {
   'border-soft': '#e8e7dd',
   text: '#17211d',
   'text-2': '#4e564e',
-  'text-3': '#838b80',
+  // Darkened from #838b80 to meet WCAG 1.4.3 (4.5:1) as small muted text: the
+  // old value was 3.4:1 on the surface and 3.0:1 on brand-soft. This clears
+  // both (5.3:1 / 4.7:1) while staying the lightest tier of the text scale.
+  'text-3': '#646a61',
   'on-brand': '#f4f3ec',
 
   /* elevation & atmosphere */
