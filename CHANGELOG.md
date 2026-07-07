@@ -14,6 +14,30 @@ All notable changes to Formsmith are documented here. The format follows
 See the [roadmap](docs/roadmap.md) for what's planned. v1.1's headline additions are file
 upload (via an optional storage profile), a native n8n node, and Slack notifications.
 
+## [0.1.4], 2026-07-07
+
+Results and the responses API now scale to forms with tens of thousands of submissions,
+instead of loading every response into the browser at once.
+
+### Added
+
+- Response summary endpoint (`GET /forms/{id}/responses/summary`): the total response count
+  plus per-question aggregates (choice distributions, yes/no and NPS breakdowns, scale
+  averages), computed on the server rather than in the browser.
+- Streaming CSV and JSON export: the export endpoint walks the table and streams the file, so
+  a download succeeds at any response volume instead of buffering everything first.
+- Keyset pagination on the response list. `GET /forms/{id}/responses` accepts `limit` (default
+  50, max 200) and an opaque `cursor`, and the Results tab now loads responses a page at a time
+  with a "Load more" control.
+
+### Changed
+
+- **Breaking (REST API):** `GET /forms/{id}/responses` now returns
+  `{ "responses": [...], "nextCursor": <string|null> }` instead of a bare
+  `{ "responses": [...] }`, and takes the new `limit` and `cursor` query parameters. The
+  generated OpenAPI spec reflects the new shape. This change was made now, while there are no
+  known API consumers.
+
 ## [0.1.3], 2026-07-07
 
 ### Fixed
@@ -117,6 +141,9 @@ The first public release. The whole product runs on two containers
   submit path fast under load.
 - **No telemetry or analytics of any kind**, a self-hosted instance never phones home.
 
-[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/formsmithapp/formsmith/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/formsmithapp/formsmith/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/formsmithapp/formsmith/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/formsmithapp/formsmith/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/formsmithapp/formsmith/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/formsmithapp/formsmith/releases/tag/v0.1.0
